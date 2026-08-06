@@ -6,9 +6,12 @@ and three-pass (fwd/bwd/dbwd) joint compilation on that IR stably outperforms ex
 per-operator stacks (eager / torch.compile / cuEquivariance + autograd) on conservative training —
 wall-clock and peak memory.
 
-**Status: Phase 0 complete — Gate 0 CONDITIONAL PASS**, review conditions closed (§6). Phase 1
-(SP-IR + VJP) is cleared to start. Every number below is measured; nothing is projected, and no
-baseline is reported at a setting that cripples it.
+**Status: Phase 1 complete — Gate 1 pending review (§8).** Gate 0 passed with its review
+conditions closed (§6). Every number below is measured; nothing is projected, and no baseline is
+reported at a setting that cripples it.
+
+The IR is called the **segmented-polynomial IR** throughout; the package is `zippel`. "SPIR"
+appears only where this document quotes the original work order.
 
 **All login-node timings are PROVISIONAL** and are replaced by `sbatch slurm/bench.sbatch` on an
 exclusive node, which also records NVML clocks. Units are **GiB** (2³⁰) throughout.
@@ -726,3 +729,131 @@ the work scales. To be measured on the exclusive node alongside the rest of the 
 To be completed at Gate 3. M1 does **not** test: the full model (only one interaction block),
 dynamic shapes (fixed buckets only), other architectures (no MACE/DeePMD), portability (SM90a
 only), or multi-GPU.
+
+---
+
+## 8. Gate 1 — segmented-polynomial IR and source-to-source VJP
+
+**Status: complete, pending review.** 102 tests green in 20.6 s (budget: < 5 min).
+
+### 8.1 The complexity table (regenerate with `python bench/ir_stats.py`)
+
+eSEN-sm (K4L2), FP32 sizing for peak-live bytes, no rematerialization and no fusion:
+
+| program | ops pre-CSE | ops post-CSE | paths | distinct contraction signatures | kernel families | peak live GiB (si_small) | peak live GiB (si_medium) |
+|---|---|---|---|---|---|---|---|
+| fwd | 106 | 101 | 193 | 48 | 45 | 0.23 | 6.03 |
+| force | 407 | 290 | 486 | 145 | 136 | 0.77 | 20.73 |
+| dbwd | 1221 | 903 | 1467 | 379 | 352 | 2.12 | 57.32 |
+
+*Signatures* count ops that differ only in which buffers they point at as one — an upper bound
+on kernels Phase 2 must write. *Kernel families* additionally abstract slice **offsets**, keeping
+extents — the corresponding lower bound. Neither is a timing; the interpreter is an oracle, and
+no number here belongs in a performance table.
+
+### 8.2 Reading it
+
+**Growth is linear in program size, which is the good news.** Each VJP multiplies the op count
+by roughly three: 101 → 290 → 903 post-CSE, i.e. 2.9× then 3.1×. That is what reverse-mode
+should cost, and it means dbwd does not blow up combinatorially — the double backward is about
+9× the forward, not exponentially larger. CSE earns its place at the dbwd scale, removing 26 %
+of ops (1221 → 903) where it removed only 5 % on the forward, because the two VJP passes
+regenerate the same intermediates. The vocabulary holds throughout: every derived program passes
+`assert_closed`, and the derivatives are exact against three independent legs (§8.3).
+
+**The absolute signature count is the problem, and it is a Phase 2 design constraint rather than
+a Phase 1 failure.** 379 signatures — 352 even after abstracting slice offsets — is far too many
+to hand-write one kernel apiece within M1's budget. That the two numbers are close is the
+informative part: the diversity is **not** slice offsets (which a kernel can take as runtime
+arguments) but genuine structural variety in extents and path shape, produced by the per-`m` and
+per-`l` block decomposition. So the lever for Phase 2 is extent-parameterised kernels that treat
+the per-m convolutions and the per-l Wigner blocks as one family each, not offset
+parameterisation. On memory, the 57.32 GiB unscheduled peak at si_medium is **not** directly
+comparable to eager's measured 38.13 GiB: our liveness model sums every live buffer with no
+allocator reuse, while `max_memory_allocated` benefits from reuse of freed blocks. The honest
+reading is that it is a pessimistic upper bound on the unscheduled program, and that Phase 2's
+memory win has to come from fusion and rematerialization rather than from scheduling order
+alone — order alone cannot beat an allocator that already reuses.
+
+### 8.3 Validation ladder
+
+All FP64, CPU, deterministic. Tiny synthetic programs plus one real fixture (si_small).
+
+| check | result |
+|---|---|
+| 4.1 interpreter fwd ≡ reference (si_small) | **2.6e-16** (tolerance 1e-12) |
+| 4.2 IR force ≡ autograd | **4.97e-15** |
+| 4.2 IR parameter grads ≡ autograd | 1.9e-15 … 4.7e-16 across `c1_w0`, `c2_w0`, `ro_w1`, `rad_w0` |
+| 4.3 IR dbwd ≡ double-autograd | L 3.7e-16, dL/dpos **4.90e-15** |
+| 4.3 third leg: central differences of L | agrees to < 1e-6 |
+| 4.4 translation / rotation / permutation invariance of E | < 1e-11 |
+| 4.4 ΣF = 0 | < 1e-10 relative |
+| 4.5 `poly_envelope` C² across the cutoff | residual vanishes at the correct rate |
+| 4.6 PIT on a complex-product rewrite | accepted; planted sign flip rejected |
+| closure after every transform | green, plus a falsification test |
+
+Net torque is deliberately **not** tested: it is not a valid invariant on a periodic cell, so a
+torque check here would test the fixture rather than the block.
+
+**Oracle independence.** Bit-exact forward agreement between the IR interpreter and
+`blocks/eso2_ref.py` implies shared torch op ordering, not independent derivation — both call the
+same primitives in the same sequence. Forward independence therefore rests on the fairchem
+cross-check (§3), and derivative independence on the autograd and finite-difference legs, not on
+interpreter-versus-reference agreement.
+
+### 8.4 The bug worth naming
+
+The forward was exact at 2e-16 while forces were wrong by 2.6e-01. Cause: a path may read the
+same operand more than once — `x*x` is one path with `operands = (0, 0)` — and the transform took
+`operands.index(k)`, finding only the first occurrence and silently halving the derivative.
+
+This is a *different* site from the diamond test, which covers one buffer consumed by several
+ops. This is one path containing several occurrences of one operand. The first does not imply the
+second; both now have dedicated regression tests (DECISIONS.md D21). It is also a good argument
+for the three-leg dbwd check: a two-leg comparison between two implementations that share an
+op ordering can agree while both are wrong.
+
+### 8.5 Vocabulary accounting: `sin` and `cos` are never used
+
+v1.1 declares eight scalar functions; the assembled programs use **six**. Neither `sin` nor `cos`
+appears in fwd, force or dbwd — the rational Wigner rewrite means the forward never forms an
+angle, and no derivative rule can introduce them (`rsqrt'` adds `reciprocal`, nothing adds
+trigonometry).
+
+So **position → E is a rational function of the atomic positions with `rsqrt` as the sole
+non-polynomial primitive.** That is a representability result, not an optimisation, and it
+improves the exact-verification outlook: `rsqrt` yields a square root of a rational, the same
+kind of algebraic number as the Clebsch-Gordan coefficients, so the whole path lives in one real
+algebraic extension rather than a transcendental one. Full write-up in
+`findings/vocabulary-shrink.md`; the limits of the PIT claim in `findings/pit-exactness.md`.
+
+`sin`/`cos` are left in v1.1 rather than removed, so an architecture that genuinely needs them
+(an S² grid activation, or spherical harmonics of an angle) stays expressible.
+
+### 8.6 Standing threads
+
+| thread | status |
+|---|---|
+| (a) exclusive-node sbatch replacing the PROVISIONAL Gate 0 table | job 4376123 completed, but its results were **corrupted** by a concurrent login-node run (§8.7). Re-run 4376140 in flight |
+| (b) cuEq trigger isolation + updated draft issue | not started |
+| (c) `math_dtype` finding split into its own repro + draft | not started |
+| (d) `findings/` ledger | started: `vocabulary-shrink.md`, `pit-exactness.md` |
+| (e) rename + push, remote `main` and `gate-0` verified | done — both refs confirmed on the remote |
+
+### 8.7 A measurement-integrity failure, and the fix
+
+Job 4376123 completed cleanly, but its `bench/results/*.json` were **partially overwritten** by a
+login-node run I had started in parallel: both wrote the same directory, and the local run
+finished B1 last. The exclusive-node log held `cu_medium fp32 = 498.09 ms, IQR 0.89`; the JSON on
+disk held the contended `947.59 ms, IQR 191.31`, and I committed it. A partial overwrite is the
+worst kind, because the file still looks plausible.
+
+Fixed at the cause, not the symptom: every `Measurement` now records `host`, `slurm_job` and
+`exclusive`, so provenance is checkable after the fact; and `bench/run_all.sh` takes an exclusive
+`flock` on the results directory so a second run refuses rather than overwrites. The contaminated
+JSONs were deleted and job 4376140 regenerates all of them coherently.
+
+The same run also exposed a real bug in the max-batch metric: it reported bf16 `k=4` at 20.90 GiB
+against `k=3` at 62.59 GiB — a larger batch using less memory. The exponential probe advanced its
+lower bound without carrying the corresponding peak, so every result reported the `k=1` peak.
+Fixed.
