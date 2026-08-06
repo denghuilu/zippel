@@ -1,0 +1,108 @@
+"""CSE and dead-code elimination on the segmented-polynomial IR.
+
+Neither pass reassociates arithmetic, so both are **exact in floating point** — no tolerance
+is involved and no result changes. That matters here: the derived programs are validated
+against FP64 oracles, and a simplifier that perturbed values would make those comparisons
+meaningless.
+
+CSE is structural hashing over `(op kind, attributes, input ids)` in topological order
+(docs/ir.md section 4). DCE is reachability from the program's declared outputs.
+"""
+
+from __future__ import annotations
+
+from dataclasses import replace
+
+from zippel.ir import IndexType, Op, Program
+
+
+def _rewrite_inputs(op: Op, sub: dict[str, str]) -> Op:
+    return replace(
+        op,
+        inputs=tuple(sub.get(i, i) for i in op.inputs),
+        index_maps=tuple(sub.get(m, m) if m else m for m in op.index_maps),
+        out_index_map=sub.get(op.out_index_map, op.out_index_map) if op.out_index_map else None,
+    )
+
+
+def cse(prog: Program) -> Program:
+    """Common-subexpression elimination by structural hashing.
+
+    Runs in definition order, which is already topological, so an op's inputs are canonical
+    by the time it is hashed.
+    """
+    out = Program(inputs=dict(prog.inputs), outputs=prog.outputs, _counter=prog._counter)
+    seen: dict[tuple, str] = {}
+    sub: dict[str, str] = {}
+
+    for name in prog.topo():
+        op = _rewrite_inputs(prog.ops[name], sub)
+        key = op.key()
+        if key in seen:
+            sub[name] = seen[key]
+            continue
+        seen[key] = name
+        out.ops[name] = replace(op, name=name)
+
+    out.outputs = tuple(sub.get(o, o) for o in prog.outputs)
+    return out
+
+
+def dce(prog: Program, keep: tuple[str, ...] | None = None) -> Program:
+    """Drop ops no declared output depends on."""
+    roots = set(keep or ()) | set(prog.outputs)
+    live: set[str] = set()
+    stack = [r for r in roots if r in prog.ops]
+    live.update(stack)
+
+    while stack:
+        op = prog.ops[stack.pop()]
+        for src in (*op.inputs, *(m for m in op.index_maps if m),
+                    *( (op.out_index_map,) if op.out_index_map else () )):
+            if src in prog.ops and src not in live:
+                live.add(src)
+                stack.append(src)
+
+    out = Program(inputs=dict(prog.inputs), outputs=prog.outputs, _counter=prog._counter)
+    for name in prog.topo():
+        if name in live:
+            out.ops[name] = prog.ops[name]
+    return out
+
+
+def simplify(prog: Program, keep: tuple[str, ...] | None = None) -> Program:
+    """DCE then CSE then DCE: the second DCE collects ops orphaned by CSE's rewrites."""
+    return dce(cse(dce(prog, keep)), keep)
+
+
+# ----------------------------------------------------------------------------------------
+# statistics
+# ----------------------------------------------------------------------------------------
+
+
+def op_counts(prog: Program) -> dict[str, int]:
+    counts = {"total": len(prog.ops), "segmented_contraction": 0, "scalar_map": 0, "paths": 0}
+    for op in prog.ops.values():
+        counts[op.kind] += 1
+        counts["paths"] += len(op.paths)
+    return counts
+
+
+def signatures(prog: Program) -> dict[tuple, int]:
+    """Distinct op signatures and their multiplicity.
+
+    The Phase 2 kernel-count proxy: ops sharing a signature can be served by one generated
+    kernel with different pointers, so this is an upper bound on how many kernels hand
+    scheduling has to write.
+    """
+    out: dict[tuple, int] = {}
+    for op in prog.ops.values():
+        out[op.signature()] = out.get(op.signature(), 0) + 1
+    return out
+
+
+def contraction_signatures(prog: Program) -> dict[tuple, int]:
+    return {s: n for s, n in signatures(prog).items() if s[0] == "segmented_contraction"}
+
+
+__all__ = ["cse", "dce", "simplify", "op_counts", "signatures", "contraction_signatures"]
