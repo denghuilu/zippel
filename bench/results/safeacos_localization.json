@@ -1,0 +1,34 @@
+[
+  {
+    "band": "deep interior |x| <= 0.5",
+    "safeacos_norm": 0.0,
+    "analytic_norm": 23.994595647331252,
+    "rel_err": 1.0,
+    "torch_acos_rel_err": 4.3266660443630185e-16,
+    "verdict": "ABSENT (no graph)"
+  },
+  {
+    "band": "mid |x| in [0.5, 0.9]",
+    "safeacos_norm": 0.0,
+    "analytic_norm": 234.9508712125908,
+    "rel_err": 1.0,
+    "torch_acos_rel_err": 4.903874635388232e-16,
+    "verdict": "ABSENT (no graph)"
+  },
+  {
+    "band": "near-edge |x| in [0.9, 1-1e-3]",
+    "safeacos_norm": 0.0,
+    "analytic_norm": 51435.60258532711,
+    "rel_err": 1.0,
+    "torch_acos_rel_err": 3.254721761811226e-16,
+    "verdict": "ABSENT (no graph)"
+  },
+  {
+    "band": "clamp band |x| > 1-1e-7",
+    "safeacos_norm": 0.0,
+    "analytic_norm": 3.535782189313508e+17,
+    "rel_err": 1.0,
+    "torch_acos_rel_err": 1.0,
+    "verdict": "ABSENT (no graph)"
+  }
+]

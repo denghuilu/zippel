@@ -1,8 +1,7 @@
 # DRAFT — upstream issue for fairchem. **Not filed.** For review before submission.
 
-Status: localization measurement pending (see the TODO block at the end); the numbers below
-marked `[PENDING]` must be filled in from `bench/safeacos_localization.py` before this is
-considered ready to send.
+Status: localization measured (below). Remaining blockers before this is sendable are listed in
+the TODO block at the end.
 
 ---
 
@@ -79,7 +78,23 @@ with fixed vectors (`u^T W(pos) v`, chosen to be direction-dependent — note `|
 | ‖∂²‖ | **3103.208** | **3091.557** | **5.5 % relative** |
 
 A second random configuration gave 7.1 %, so the magnitude is input-dependent rather than a fixed
-offset. `[PENDING: interior-vs-clamp-band localization result]`
+offset.
+
+**This is not a clamp-band edge case.** Measured against the analytic
+`d2/dx2 acos(x) = -x (1-x^2)^(-3/2)` in FP64, the second derivative is *structurally absent* in
+every band, including the deep interior where the clamp never fires:
+
+| band | `Safeacos` d2 | analytic d2 | result |
+|---|---|---|---|
+| deep interior, \|x\| <= 0.5 | 0 | 2.40e+01 | autograd refuses: no graph |
+| mid, \|x\| in [0.5, 0.9] | 0 | 2.35e+02 | autograd refuses: no graph |
+| near-edge, \|x\| in [0.9, 1-1e-3] | 0 | 5.14e+04 | autograd refuses: no graph |
+| clamp band, \|x\| > 1-1e-7 | 0 | 3.54e+17 | autograd refuses: no graph |
+
+So the fix is not a matter of widening or tightening `EPS`: the derivative's dependence on `x` is
+missing from the graph regardless of where `x` lies. (In the full rotation the failure is quieter
+— `x` still reaches the output through `Safeatan2` and the normalisation, so the second derivative
+comes out nonzero but *incomplete* rather than raising.)
 
 ### Suggested fix
 
