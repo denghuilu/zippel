@@ -92,13 +92,15 @@ def largest_fitting(fixture: str, precision: str, budget_gib: float, k_max: int 
     if not ok1:
         return {"k": 0, "peak_gib": peak1, "note": "a single cell already exceeds the budget"}
 
-    # exponential probe up, then bisect
+    # exponential probe up, then bisect. The peak must be carried with `lo` at every step:
+    # not doing so reported the k=1 peak for every k, which showed up as a larger batch
+    # claiming less memory than a smaller one.
     lo, lo_peak, hi = 1, peak1, 2
     while hi <= k_max:
-        ok, _ = fits(hi)
+        ok, peak = fits(hi)
         if not ok:
             break
-        lo, hi = hi, hi * 2
+        lo, lo_peak, hi = hi, peak, hi * 2
     if hi > k_max:
         return {"k": lo, "peak_gib": lo_peak, "note": f"hit the k_max={k_max} cap"}
 

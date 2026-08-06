@@ -105,4 +105,35 @@ def contraction_signatures(prog: Program) -> dict[tuple, int]:
     return {s: n for s, n in signatures(prog).items() if s[0] == "segmented_contraction"}
 
 
-__all__ = ["cse", "dce", "simplify", "op_counts", "signatures", "contraction_signatures"]
+def kernel_families(prog: Program) -> dict[tuple, int]:
+    """Coarser than `signatures`: slice *offsets* are abstracted away, extents kept.
+
+    A generated kernel can take slice offsets as runtime arguments, so two ops that differ
+    only in where they read and write are the same kernel. `signatures` counts them
+    separately and is therefore an upper bound on how many kernels Phase 2 must write; this
+    is the corresponding lower bound. The truth is in between and depends on how much the
+    emitter parameterises, which is a Phase 2 decision.
+    """
+    def extent(sl):
+        if sl.start is None and sl.stop is None:
+            return None
+        return (sl.stop or 0) - (sl.start or 0)
+
+    out: dict[tuple, int] = {}
+    for op in prog.ops.values():
+        if op.kind != "segmented_contraction":
+            continue
+        key = (str(op.out_type),
+               tuple(m is not None for m in op.index_maps),
+               op.out_index_map is not None,
+               tuple(sorted(
+                   (p.subscripts, p.operands,
+                    tuple(tuple(extent(x) for x in g) for g in p.in_slices),
+                    tuple(extent(x) for x in p.out_slice))
+                   for p in op.paths)))
+        out[key] = out.get(key, 0) + 1
+    return out
+
+
+__all__ = ["cse", "dce", "simplify", "op_counts", "signatures", "contraction_signatures",
+           "kernel_families"]

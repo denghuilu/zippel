@@ -43,6 +43,12 @@ for _var, _sub in (
 
 os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
 
+# The FP64 CPU interpreter runs many small einsums. On a 288-core node torch's default
+# thread pool thrashes badly on them: the block ladder took 2m27s wall for 158 minutes of
+# user time, versus 13s wall when capped. Cap unless the caller has an opinion.
+os.environ.setdefault("OMP_NUM_THREADS", "8")
+torch.set_num_threads(int(os.environ["OMP_NUM_THREADS"]))
+
 
 requires_cuda = pytest.mark.skipif(
     not torch.cuda.is_available(), reason="needs a CUDA device"

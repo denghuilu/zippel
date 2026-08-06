@@ -201,3 +201,30 @@ One dated line per deviation from the M1 work order: what changed, why.
   Worth recording because it was found by the type checker rejecting three successive
   formulations, not by design: the restriction in 2.1 is doing real work.
 
+## 2026-08-07 — Phase 1 assembly
+
+- **D20. The element-embedding table lookup is outside the IR program.** `emb_src`/`emb_dst`
+  arrive as edge-segment inputs. A table lookup is a gather along a *non-segment* axis, which
+  the v1.1 index-map model does not carry, and it is position-independent — so it lies outside
+  the position→E path that forces and the double backward flow along, which is what Phase 1
+  tests. Its VJP is the same scatter-add lemma already exercised. Adding it would mean either a
+  second kind of gather or a vocabulary extension; neither is warranted for what it buys.
+
+- **D21. A path may read the same operand more than once, and each occurrence gets its own
+  VJP contribution.** `x*x` is a single path with `operands = (0, 0)`. Taking
+  `operands.index(k)` finds only the first occurrence and silently halves the derivative —
+  which is exactly what happened: the forward was exact at 2e-16 while F was wrong by 2.6e-01.
+  The transform now iterates over every position where operand `k` appears.
+
+  Worth separating from the diamond test: that one covers **buffer**-level accumulation (one
+  buffer, several consuming ops). This is **path**-level accumulation (one path, one operand,
+  several occurrences). They are different sites and the first does not imply the second, so
+  there is now a dedicated regression test for each.
+
+- **D22. `1 - u` is never materialised; the sigmoid and silu derivatives are expanded instead.**
+  Writing `sigmoid' = y(1-y)` needs a broadcast constant `1` matching each operand's type, and
+  the block applies sigmoid and silu to buffers of four different shapes — so it would have
+  needed a ones buffer per shape. Expanding to `y - y²` and `s + xs - xs·s` keeps every
+  derivative a plain sum of contraction paths over buffers that already exist, and removes an
+  input from the transform's signature.
+

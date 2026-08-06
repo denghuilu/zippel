@@ -22,6 +22,8 @@ Binding anti-gaming rules this file enforces mechanically:
 
 from __future__ import annotations
 
+import os
+import socket
 import statistics
 from dataclasses import dataclass, field
 
@@ -44,6 +46,9 @@ class Measurement:
     atoms: int
     edges: int
     clocks_mhz: float | None = None
+    host: str = ""
+    slurm_job: str = ""
+    exclusive: bool = False
     notes: str = ""
     error: str | None = None
     extra: dict = field(default_factory=dict)
@@ -135,6 +140,9 @@ def time_training_step(
         p05_ms=_percentile(samples, 0.05), p95_ms=_percentile(samples, 0.95),
         peak_mem_gib=peak, iters=n, atoms=atoms, edges=edges,
         clocks_mhz=gpu_clocks_mhz(), notes=notes,
+        host=socket.gethostname(),
+        slurm_job=os.environ.get("SLURM_JOB_ID", ""),
+        exclusive=bool(os.environ.get("SLURM_JOB_ID")),
     )
 
 

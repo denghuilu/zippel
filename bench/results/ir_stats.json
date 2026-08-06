@@ -1,0 +1,89 @@
+{
+  "config": "K4L2 (eSEN-sm)",
+  "shapes": {
+    "si_small": {
+      "node": 216,
+      "edge": 9576,
+      "graph": 1
+    },
+    "si_medium": {
+      "node": 5832,
+      "edge": 259474,
+      "graph": 1
+    }
+  },
+  "rows": [
+    {
+      "program": "fwd",
+      "ops_pre_cse": 106,
+      "ops_post_cse": 101,
+      "contractions": 90,
+      "scalar_maps": 11,
+      "paths": 193,
+      "contraction_signatures": 48,
+      "all_signatures": 55,
+      "kernel_families": 45,
+      "scalar_fns": [
+        "exp",
+        "poly_envelope",
+        "rsqrt",
+        "sigmoid",
+        "silu"
+      ],
+      "peak_live_gib": {
+        "si_small": 0.2266460731625557,
+        "si_medium": 6.026460282504559
+      }
+    },
+    {
+      "program": "force",
+      "ops_pre_cse": 407,
+      "ops_post_cse": 290,
+      "contractions": 270,
+      "scalar_maps": 20,
+      "paths": 486,
+      "contraction_signatures": 145,
+      "all_signatures": 157,
+      "kernel_families": 136,
+      "scalar_fns": [
+        "exp",
+        "poly_envelope",
+        "reciprocal",
+        "rsqrt",
+        "sigmoid",
+        "silu"
+      ],
+      "peak_live_gib": {
+        "si_small": 0.7701894864439964,
+        "si_medium": 20.73431620001793
+      }
+    },
+    {
+      "program": "dbwd",
+      "ops_pre_cse": 1221,
+      "ops_post_cse": 903,
+      "contractions": 882,
+      "scalar_maps": 21,
+      "paths": 1467,
+      "contraction_signatures": 379,
+      "all_signatures": 392,
+      "kernel_families": 352,
+      "scalar_fns": [
+        "exp",
+        "poly_envelope",
+        "reciprocal",
+        "rsqrt",
+        "sigmoid",
+        "silu"
+      ],
+      "peak_live_gib": {
+        "si_small": 2.1214002668857574,
+        "si_medium": 57.31719147413969
+      }
+    }
+  ],
+  "anchor_lmax4_fwd": {
+    "ops_post_cse": 145,
+    "contraction_signatures": 58
+  }
+}

@@ -15,6 +15,18 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Two concurrent runs sharing bench/results/ silently overwrite each other's JSON: a
+# login-node run once clobbered an exclusive-node B1 result, leaving contended numbers on
+# disk while the authoritative ones survived only in the SLURM log. Take an exclusive lock
+# so that cannot recur; every Measurement also records host/slurm_job so provenance is
+# checkable after the fact.
+mkdir -p bench/results
+exec 9>bench/results/.run.lock
+if ! flock -n 9; then
+  echo "another benchmark run holds bench/results/.run.lock -- refusing to overwrite" >&2
+  exit 1
+fi
+
 FIXTURES="${FIXTURES:-si_small cu_small si_medium cu_medium si_large cu_large}"
 PRECISIONS="${PRECISIONS:-fp32 tf32 bf16}"
 mkdir -p bench/results

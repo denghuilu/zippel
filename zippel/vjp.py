@@ -100,8 +100,7 @@ def _vjp_contraction(prog: Program, op, cot: str, k: int,
     that axis**. It is expressed with the vocabulary already has -- a scatter-add through an
     all-zeros index map into a length-1 buffer -- so no new op is needed (DECISIONS.md D18).
     """
-    relevant = [p for p in op.paths if k in p.operands]
-    if not relevant:
+    if not any(k in p.operands for p in op.paths):
         return None
 
     t_out = prog.type_of(op.inputs[k])
@@ -109,10 +108,16 @@ def _vjp_contraction(prog: Program, op, cot: str, k: int,
     index_maps = list(op.index_maps) + [op.out_index_map]
     cot_idx = len(op.inputs)
 
+    # A path may read operand k more than once -- `x*x` is one path with operands (0, 0).
+    # The product rule then gives one contribution *per occurrence*, so this iterates over
+    # every position j rather than taking `operands.index(k)`, which would find only the
+    # first and silently halve the derivative (DECISIONS.md D21).
+    occurrences = [(p, j) for p in op.paths
+                   for j, kk in enumerate(p.operands) if kk == k]
+
     paths = []
-    for p in relevant:
+    for p, j in occurrences:
         specs, out_spec = p.parse()
-        j = p.operands.index(k)                      # position of operand k within this path
         new_specs = list(specs)
         new_specs[j] = out_spec                      # the cotangent takes k's slot
         new_out_spec = specs[j]
@@ -148,31 +153,38 @@ def _vjp_contraction(prog: Program, op, cot: str, k: int,
     )
 
 
-def _one_minus(prog: Program, u: str, ones: str) -> str:
-    """1 - u, using the program's broadcast `ones` buffer."""
-    t = prog.type_of(u)
-    spec, sl = default_spec(t), full_slice(t)
-    return prog.contract(
-        inputs=[ones, u], out_type=t,
-        paths=[ContractionPath(1.0, f"{spec}->{spec}", (0,), (full_slice(prog.type_of(ones)),), sl),
-               ContractionPath(-1.0, f"{spec}->{spec}", (1,), (sl,), sl)],
-        hint="1m",
-    )
+def _vjp_scalar(prog: Program, op, cot: str, y: str, ones: str | None = None) -> str:
+    """VJP of a scalar_map: cot * f'(x). Every f' stays inside the vocabulary (docs/ir.md 3.2).
 
-
-def _vjp_scalar(prog: Program, op, cot: str, y: str, ones: str) -> str:
-    """VJP of a scalar_map: cot * f'(x). Every f' stays inside the vocabulary (docs/ir.md 3.2)."""
+    No constant-one buffer is needed anywhere. Writing sigmoid' as `y(1-y)` would require a
+    broadcast `1` matching each operand's type, and the block applies sigmoid and silu to
+    buffers of four different shapes -- so it would need a ones buffer per shape. Expanding
+    the products instead (`y - y^2`, `s + xs - xs*s`) keeps every derivative a plain sum of
+    contraction paths over buffers that already exist.
+    """
     x, fn = op.inputs[0], op.fn
+    t = prog.type_of(x)
+    spec, sl = default_spec(t), full_slice(t)
 
     if fn == "exp":                       # f' = y
         return prog.mul(cot, y, hint="dexp")
-    if fn == "sigmoid":                   # f' = y (1 - y)
-        return prog.mul(cot, prog.mul(y, _one_minus(prog, y, ones), hint="sg"), hint="dsig")
-    if fn == "silu":                      # f' = s + x s (1 - s),   s = sigmoid(x)
-        s = prog.scalar(x, "sigmoid", hint="s")
-        xs = prog.mul(x, s, hint="xs")
-        dsilu = prog.add(s, prog.mul(xs, _one_minus(prog, s, ones), hint="xs1s"), hint="dsilu")
-        return prog.mul(cot, dsilu, hint="dsl")
+    if fn == "sigmoid":                   # f' = y - y^2
+        d = prog.contract(
+            [y, y], t,
+            [ContractionPath(1.0, f"{spec}->{spec}", (0,), (sl,), sl),
+             ContractionPath(-1.0, f"{spec},{spec}->{spec}", (0, 1), (sl, sl), sl)],
+            hint="dsig")
+        return prog.mul(cot, d, hint="dsg")
+    if fn == "silu":                      # f' = s + x*s - x*s*s,   s = sigmoid(x)
+        s_ = prog.scalar(x, "sigmoid", hint="s")
+        xs = prog.mul(x, s_, hint="xs")
+        d = prog.contract(
+            [s_, xs, s_], t,
+            [ContractionPath(1.0, f"{spec}->{spec}", (0,), (sl,), sl),
+             ContractionPath(1.0, f"{spec}->{spec}", (1,), (sl,), sl),
+             ContractionPath(-1.0, f"{spec},{spec}->{spec}", (1, 2), (sl, sl), sl)],
+            hint="dsilu")
+        return prog.mul(cot, d, hint="dsl")
     if fn == "rsqrt":                     # f' = -1/2 * y * reciprocal(x)
         r = prog.scalar(x, "reciprocal", hint="rx")
         return prog.mul(cot, prog.mul(y, r, hint="yr"), coeff=-0.5, hint="drsq")
@@ -193,7 +205,7 @@ def _vjp_scalar(prog: Program, op, cot: str, y: str, ones: str) -> str:
 # ----------------------------------------------------------------------------------------
 
 
-def vjp(prog: Program, output: str, wrt: list[str], seed: str, ones: str,
+def vjp(prog: Program, output: str, wrt: list[str], seed: str, ones: str | None = None,
         zero_index: dict[str, str] | None = None) -> dict[str, str]:
     """Extend `prog` in place with the VJP of `output` w.r.t. `wrt`, seeded by `seed`.
 
@@ -215,7 +227,7 @@ def vjp(prog: Program, output: str, wrt: list[str], seed: str, ones: str,
         op = prog.ops[name]
         cot = cots.pop(name)
         if op.kind == "scalar_map":
-            cots.add(op.inputs[0], _vjp_scalar(prog, op, cot, y=name, ones=ones))
+            cots.add(op.inputs[0], _vjp_scalar(prog, op, cot, y=name))
         else:
             for k, src in enumerate(op.inputs):
                 if isinstance(prog.type_of(src), IndexType):

@@ -569,3 +569,68 @@ def _gate(p, gate, x, layout, H, L, unit_m):
             ((slice(row, row + 1), S), (slice(g * H, (g + 1) * H),)),
             (slice(row, row + 1), S)))
     return p.contract([scal, x, sig], t, paths, hint="gate")
+
+
+# ----------------------------------------------------------------------------------------
+# force and double-backward programs
+# ----------------------------------------------------------------------------------------
+
+
+def build_force(cfg: BlockConfig = BlockConfig(), gauss_coeff=None):
+    """fwd + the VJP slice producing F = -dE/dpos."""
+    from zippel.vjp import vjp
+
+    p, meta = build_forward(cfg, gauss_coeff)
+    seed = p.add_input("seed_E", BufferType("graph", ()))
+    grads = vjp(p, meta["energy"], ["pos"], seed=seed,
+                zero_index={"node": "zn", "edge": "ze"})
+    force = p.scale(grads["pos"], -1.0, hint="F")
+    p.outputs = (meta["energy"], force)
+    meta |= {"force": force, "seed_E": seed, "dE_dpos": grads["pos"]}
+    return p, meta
+
+
+def build_dbwd(cfg: BlockConfig = BlockConfig(), gauss_coeff=None,
+               w_e: float = 1.0, w_f: float = 1.0):
+    """The measured unit: E, F = -dE/dpos, L = w_E MSE(E) + w_F MSE(F), then d L / d(all).
+
+    The second VJP differentiates *through* the first one -- the force program's ops are
+    already in the program by the time it runs -- which is what makes this a true double
+    backward rather than two independent gradients.
+    """
+    from zippel.vjp import vjp
+
+    p, meta = build_force(cfg, gauss_coeff)
+    n_pos = 3
+    graph_t = BufferType("graph", ())
+    pos_t = BufferType("node", (("x", n_pos),))
+
+    p.add_input("e_ref", graph_t)
+    p.add_input("f_ref", pos_t)
+    # MSE over the force components averages by 1/(3N), and N is dynamic -- so it cannot be a
+    # static path coefficient. It arrives as a rank-0 runtime constant instead.
+    p.add_input("inv_nf", BufferType("none", ()))
+
+    # (E - E_ref)^2 ; the graph segment has length 1, so MSE is just the square
+    de = p.add(meta["energy"], "e_ref", 1.0, -1.0, hint="dE")
+    e_term = p.contract([de, de], graph_t,
+                        [ContractionPath(w_e, ",->", (0, 1), ((), ()), ())], hint="Eterm")
+
+    # mean over the 3N force components
+    df = p.contract([meta["force"], "f_ref"], pos_t,
+                    [ContractionPath(1.0, "x->x", (0,), ((S,),), (S,)),
+                     ContractionPath(-1.0, "x->x", (1,), ((S,),), (S,))], hint="dF")
+    f_term = p.contract([df, df, "inv_nf"], graph_t,
+                        [ContractionPath(w_f, "x,x,->", (0, 1, 2), ((S,), (S,), ()), ())],
+                        out_index_map="zn", hint="Fterm")
+
+    loss = p.contract([e_term, f_term], graph_t,
+                      [ContractionPath(1.0, "->", (0,), ((),), ()),
+                       ContractionPath(1.0, "->", (1,), ((),), ())], hint="loss")
+
+    seed = p.add_input("seed_L", graph_t)
+    wrt = list(meta["params"]) + ["pos", "x_node"]
+    grads = vjp(p, loss, wrt, seed=seed, zero_index={"node": "zn", "edge": "ze"})
+    p.outputs = (loss,) + tuple(grads.values())
+    meta |= {"loss": loss, "seed_L": seed, "grads": grads, "n_force_components": n_pos}
+    return p, meta
