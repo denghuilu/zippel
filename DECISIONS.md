@@ -151,3 +151,23 @@ One dated line per deviation from the M1 work order: what changed, why.
 
   Note this is a deviation from the work order's scope fence ("No new project names or
   branding"); it is a direct instruction from the reviewer, recorded here rather than silently.
+
+## 2026-08-06 — Phase 1 kickoff
+
+- **D15. The Python package is `zippel`; the IR is called the "segmented-polynomial IR" in prose,
+  never "SPIR".** Speech collision with SPIR-V. `spir/` was renamed to `zippel/`; no module name
+  contains `spir`. (The Phase 1 work order cites this as "D11", but D11 here is already the
+  canonical-fixture regeneration — recorded under this number instead so the cross-reference
+  resolves.)
+
+- **D16. `poly_envelope` is a vocabulary *family*, carrying a derivative-order attribute.**
+  Vocabulary v1.1 fixes eight `scalar_map` functions. Seven have derivatives expressible as
+  products of the other seven, so they close trivially. `poly_envelope` does not: its derivative
+  is a *different* piecewise polynomial, and the dynamic indicator `[d < 1]` cannot be written as
+  a `segmented_contraction` over static coefficients. Two options: add `poly_envelope_d1`/`_d2` as
+  separate vocabulary entries (widening the set, which the closure test exists to prevent), or
+  give the single entry an integer `order` that differentiation increments. The second is chosen:
+  closure is then exact — `d/dx poly_envelope(k) = poly_envelope(k+1)` — and the vocabulary stays
+  at eight named functions. Flagged rather than buried, since it is the one place where "the
+  derivative stays inside the set" needs a definition rather than a proof.
+
