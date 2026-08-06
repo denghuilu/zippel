@@ -53,14 +53,20 @@ out_type    : BufferType
 with
 
 ```
-ContractionPath = (coeff: float, subscripts: str, in_slices: tuple[...], out_slice: tuple[...])
+ContractionPath = (coeff, subscripts, operands: tuple[int,...], in_slices, out_slice)
 ```
+
+`operands` names *which of the op's inputs this path reads*, by index, and `subscripts` has one
+spec per entry in it. That is what lets one op express both a product (one path over two
+operands, `"ic,ic->ic"`) and a **sum** (two paths, each over one operand, `"ic->ic"`). With one
+spec per op-input instead, addition would be inexpressible — `einsum("ic,ic->ic")` is a product
+(DECISIONS.md D17).
 
 Semantics — accumulate over paths, starting from zero:
 
 ```
 for p in paths:
-    operands = [ (b_k[m_k] if m_k else b_k)[:, *p.in_slices[k]]  for k in range(n) ]
+    operands = [ (b_k[m_k] if m_k else b_k)[:, *p.in_slices[j]]  for j, k in enumerate(p.operands) ]
     contrib  = p.coeff * einsum(p.subscripts, *operands)          # over trailing axes only
     if m_out:  out[:, *p.out_slice].index_add_(0, m_out, contrib)
     else:      out[:, *p.out_slice] += contrib
@@ -132,6 +138,7 @@ For operand `k`, per path:
 
 | forward | VJP w.r.t. operand `k` |
 |---|---|
+| paths not reading operand `k` | dropped — they contribute nothing |
 | `subscripts = in_0,…,in_k,…,in_{n-1} -> out` | `in_0,…,out,…,in_{n-1} -> in_k` (swap slot `k` with the output spec) |
 | `index_maps[k] = m_k` (gather) | `out_index_map = m_k` (scatter-add) |
 | `out_index_map = m_out` (scatter) | `index_maps[cot] = m_out` (gather) |
@@ -139,7 +146,11 @@ For operand `k`, per path:
 | `coeff` | unchanged |
 
 Gather and scatter-add are exact transposes of one another, which is why the swap is the whole
-rule. The other operands are carried through unchanged, so the VJP of a degree-`n` multilinear
+rule. One case is not a plain swap: a `none`-segment operand is **broadcast** over the segment
+axis in the forward direction, and the transpose of a broadcast is a **sum over that axis**. No
+new op is needed — it is a scatter-add through an all-zeros index map into a length-1 buffer,
+which the vocabulary already expresses (DECISIONS.md D18). The transform therefore takes a
+`zero_index` map from segment name to an all-zeros index buffer. The other operands are carried through unchanged, so the VJP of a degree-`n` multilinear
 path is `n` paths of the same degree — the op is closed under differentiation, and degree does not
 grow.
 

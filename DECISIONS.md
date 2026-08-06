@@ -171,3 +171,16 @@ One dated line per deviation from the M1 work order: what changed, why.
   at eight named functions. Flagged rather than buried, since it is the one place where "the
   derivative stays inside the set" needs a definition rather than a proof.
 
+- **D17. A `ContractionPath` names which operands it reads.** Implementing the VJP exposed that
+  one subscript group per op-input cannot express **addition**: `einsum("ic,ic->ic", a, b)` is a
+  product. Cotangent accumulation is addition, so the model could not have been made to work.
+  Paths now carry `operands: tuple[int, ...]`, so a sum is one op with two single-operand paths
+  and a product is one op with one two-operand path. `docs/ir.md` updated in the same commit.
+
+- **D18. The transpose of a broadcast is a scatter-add through an all-zeros index map.**
+  A `none`-segment operand (a parameter) is broadcast over the segment axis in the forward
+  direction; its VJP must therefore *sum* over that axis. This is not a gather/scatter swap and
+  initially failed the type check. It needs no new op — scattering into a length-1 buffer with an
+  all-zeros index is a segment sum, already in the vocabulary — so closure is unaffected. The
+  transform takes a `zero_index` map from segment name to such a buffer.
+
