@@ -31,26 +31,29 @@ python fixtures/make_fixtures.py --verify
 
 echo "############ 1. correctness gate ############"
 # No benchmark number is reported without a green test run (work order, section 0).
-python -m pytest tests/ -q
+python -m pytest tests/ -q -p no:warnings
 
 echo "############ 2. B1 eager ############"
 python baselines/b1_eager.py --fixtures $FIXTURES --precisions $PRECISIONS \
     --out bench/results/b1_eager.json
 
 echo "############ 3. B2 torch.compile ############"
-python baselines/b2_compile.py --fixtures $FIXTURES --precisions $PRECISIONS \
-    --out bench/results/b2_compile.json
+# b2_probe is the backend ladder (eager / backend=eager / aot_eager / inductor): it
+# establishes where the double backward is rejected in seconds. b2_compile.py carries the
+# fuller inventory but autotunes forwards that then fail at the backward, so it is not on
+# the reproduction path.
+python baselines/b2_probe.py $FIXTURES
 
 echo "############ 4. B3 cuEquivariance ############"
 # cuEquivariance's fused ops require torch <= 2.11.0 on this platform (its 0.11.0
 # extension does not load against the torch 2.13 the rest of the stack needs -- see
 # REPORT.md). B3 therefore runs in its own interpreter, together with an eager control
 # measured in the same interpreter so the comparison is internally consistent.
-if [ -x "${SPIR_CUEQ_PY:-}" ]; then
-  "$SPIR_CUEQ_PY" baselines/b3_cueq.py --fixtures $FIXTURES --precisions $PRECISIONS \
+if [ -x "${ZIPPEL_CUEQ_PY:-}" ]; then
+  "$ZIPPEL_CUEQ_PY" baselines/b3_cueq.py --fixtures $FIXTURES --precisions $PRECISIONS \
       --out bench/results/b3_cueq.json
 else
-  echo "SPIR_CUEQ_PY not set -> B3 skipped; see REPORT.md section on the cuEquivariance ABI"
+  echo "ZIPPEL_CUEQ_PY not set -> B3 skipped; see REPORT.md section on the cuEquivariance ABI"
 fi
 
 echo "############ 5. max batch (GiB budgets) ############"
