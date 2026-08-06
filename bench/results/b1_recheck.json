@@ -1,0 +1,36 @@
+[
+  {
+    "label": "B1 eager",
+    "fixture": "si_small",
+    "precision": "fp32",
+    "median_ms": 30.463647842407227,
+    "iqr_ms": 13.76465654373169,
+    "p05_ms": 29.852077579498292,
+    "p95_ms": 45.349030303955075,
+    "iters": 100,
+    "atoms": 216,
+    "edges": 9620,
+    "clocks_mhz": 1980.0,
+    "notes": "",
+    "error": null,
+    "extra": {},
+    "peak_mem_gib": 1.4851593971252441
+  },
+  {
+    "label": "B1 eager",
+    "fixture": "si_medium",
+    "precision": "fp32",
+    "median_ms": 311.58380126953125,
+    "iqr_ms": 0.69970703125,
+    "p05_ms": 310.64060363769534,
+    "p95_ms": 312.3693344116211,
+    "iters": 100,
+    "atoms": 5832,
+    "edges": 259542,
+    "clocks_mhz": 1845.0,
+    "notes": "",
+    "error": null,
+    "extra": {},
+    "peak_mem_gib": 38.13838005065918
+  }
+]

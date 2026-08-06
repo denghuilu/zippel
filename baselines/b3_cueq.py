@@ -34,14 +34,17 @@ network emits a *per-edge* weight matrix, so operand 0 is a batched input and `f
 densifies it to [E, 622592] however it is called. **eSEN instead shares W across edges**
 and varies only a per-edge diagonal gain.
 
-`indexed_linear` is the backend built for a shared weight table, and it does scale --
-but it does not reproduce `escn_tp_compact`'s semantics. The obvious explanation, a
-weight-block memory-order convention, was tested and ruled out: sweeping both packings
-gives 0.712 ((u,v)) and 1.210 ((v,u)) for `indexed_linear`, while `fused_tp` gives
-6.13e-07 for (u,v) -- confirming our packing is the right one. This does not prove the
-backend can never serve this workload; it may need a differently *constructed* descriptor
-rather than a differently *packed* operand. That needs cuEquivariance internals and is
-time-boxed out of M1.
+`indexed_linear` is the backend built for a shared weight table, and it does scale -- but
+it does not reproduce `escn_tp_compact`'s semantics. **This was triaged to a cuEquivariance
+bug, not our mapping** (`bench/b3_triage.py`): a hand oracle transcribed directly from the
+descriptor's operand/path list agrees with BOTH `fused_tp` and `naive` to machine precision
+on 6/6 cases, while `indexed_linear` disagrees with all three on the same descriptor and
+inputs. It is correct on single-path descriptors and wrong on every multi-path one,
+independently of size; the minimal failing case is `2x1 -> 2x1` at m_max=1 (12 weights,
+6 inputs, 5 paths, 0.83 rel err). A v-major packing sweep is wrong everywhere, which
+independently confirms u-major is the right block ordering.
+
+Draft upstream report: docs/upstream_cuequivariance_issue_DRAFT.md (not filed).
 
 One platform constraint: the `cuequivariance-ops-torch-cu13==0.11.0` extension (newest
 published) does not load against torch 2.13; it needs **torch <= 2.11.0**. Without it

@@ -1,0 +1,74 @@
+[
+  {
+    "case": "scalar 1x0->1x0 m=0",
+    "w_size": 1,
+    "x_size": 1,
+    "n_paths": 1,
+    "fused_tp__u_major": 0.0,
+    "fused_tp__v_major": 0.0,
+    "indexed_linear__u_major": 0.0,
+    "indexed_linear__v_major": 0.0,
+    "naive__u_major": 0.0,
+    "naive__v_major": 0.0
+  },
+  {
+    "case": "scalar 2x0->3x0 m=0",
+    "w_size": 6,
+    "x_size": 2,
+    "n_paths": 1,
+    "fused_tp__u_major": 0.0,
+    "fused_tp__v_major": 1.2201041360808067,
+    "indexed_linear__u_major": 1.7114270997027203e-08,
+    "indexed_linear__v_major": 1.220104132313885,
+    "naive__u_major": 6.959027872554202e-17,
+    "naive__v_major": 1.2201041360808067
+  },
+  {
+    "case": "l=1 only 2x1->2x1 m=1",
+    "w_size": 12,
+    "x_size": 6,
+    "n_paths": 5,
+    "fused_tp__u_major": 0.0,
+    "fused_tp__v_major": 0.5852389816119311,
+    "indexed_linear__u_major": 0.8297631330536185,
+    "indexed_linear__v_major": 0.7638750366454266,
+    "naive__u_major": 1.1729988148193487e-16,
+    "naive__v_major": 0.5852389816119311
+  },
+  {
+    "case": "l<=1 2x0+2x1 m=1",
+    "w_size": 24,
+    "x_size": 8,
+    "n_paths": 5,
+    "fused_tp__u_major": 0.0,
+    "fused_tp__v_major": 0.5950820418895786,
+    "indexed_linear__u_major": 0.4250171072193791,
+    "indexed_linear__v_major": 0.6781455668069517,
+    "naive__u_major": 0.0,
+    "naive__v_major": 0.5950820418895786
+  },
+  {
+    "case": "l<=2 2x0+2x1+2x2 m=2",
+    "w_size": 76,
+    "x_size": 18,
+    "n_paths": 9,
+    "fused_tp__u_major": 1.4433382039032773e-16,
+    "fused_tp__v_major": 1.3039177157827142,
+    "indexed_linear__u_major": 0.6181726022477759,
+    "indexed_linear__v_major": 1.0929880659481161,
+    "naive__u_major": 1.4433382039032773e-16,
+    "naive__v_major": 1.3039177157827142
+  },
+  {
+    "case": "eSEN conv1 shape",
+    "w_size": 622592,
+    "x_size": 2304,
+    "n_paths": 9,
+    "fused_tp__u_major": 7.73068967419996e-16,
+    "fused_tp__v_major": 1.5716672229991315,
+    "indexed_linear__u_major": 0.5951031580246784,
+    "indexed_linear__v_major": 1.5716672105923282,
+    "naive__u_major": 0.0,
+    "naive__v_major": 1.5716672229991315
+  }
+]

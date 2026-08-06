@@ -133,9 +133,12 @@ fairchem-core 2.11.0, torch 2.13.0+cu130, CUDA 13.0, NVIDIA GH200 (sm_90a), aarc
 
 ## TODO before this is sendable
 
-1. Fill in the interior-vs-clamp-band localization: does the discrepancy appear only for inputs
-   within `EPS` of ±1 (i.e. only where the clamp is active), or across the interior as well?
-   The interior case is the more serious one and changes how the issue should be framed.
-2. Re-check against fairchem `main`, not just 2.11.0 — the file may have changed.
-3. Search existing fairchem issues for a duplicate before filing.
-4. Decide whether to include the `gradgradcheck` regression test as a PR alongside the report.
+1. Re-check against fairchem `main`, not just 2.11.0 — the file may have changed.
+2. Search existing fairchem issues for a duplicate before filing.
+3. Decide whether to include the `gradgradcheck` regression test as a PR alongside the report.
+4. Confirm the suggested fix actually restores the correct second derivative end-to-end (patch
+   `Safeacos`, re-run `bench/safeacos_localization.py`, and check the full-rotation `‖∂²‖` lands
+   on the double-differentiable reference) before proposing it upstream.
+
+*(Interior-vs-clamp-band localization: done — see the band table above. The defect is present in
+every band, so it is a graph-structure bug rather than an `EPS` tuning question.)*
