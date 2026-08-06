@@ -1,0 +1,14 @@
+# JIT/compiler caches -- regenerable, and large
+.jit-cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Fixtures are regenerable from fixed seeds and pinned by fixtures/manifest.json,
+# which IS tracked. `bench/run_all.sh` rebuilds and verifies them on a clean clone.
+fixtures/*.npz
+
+# Benchmark result JSONs are tracked: they are the provenance for every number in
+# REPORT.md. Raw run logs are not.
+bench/results/*.log
+slurm/logs/
