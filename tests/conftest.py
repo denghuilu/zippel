@@ -12,7 +12,7 @@ Two failure modes this closes:
     own cache.
 
 So these are set **unconditionally**, not via `setdefault` -- an inherited value would
-otherwise silently win. Point SPIR_M1_CACHE_ROOT elsewhere if a shared cache is wanted.
+otherwise silently win. Point ZIPPEL_CACHE_ROOT elsewhere if a shared cache is wanted.
 
 /capstor/scratch/cscs/dlu is over its inode quota with grace expired, so nothing may be
 written there (DECISIONS.md D1). CUDA_CACHE_PATH is deliberately left alone -- see env.sh.
@@ -27,7 +27,7 @@ import pytest
 import torch
 
 _ROOT = pathlib.Path(__file__).resolve().parent.parent
-_CACHE = pathlib.Path(os.environ.get("SPIR_M1_CACHE_ROOT", _ROOT / ".jit-cache"))
+_CACHE = pathlib.Path(os.environ.get("ZIPPEL_CACHE_ROOT", _ROOT / ".jit-cache"))
 
 for _var, _sub in (
     ("CUTE_DSL_CACHE_DIR", "cute_dsl"),

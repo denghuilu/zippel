@@ -59,11 +59,18 @@ reference. This was run before any other GPU work, per the work order.
 
 ### Repo and cache locations
 
-The work order specifies `/capstor/scratch/cscs/dlu/iclr/spir-m1`. **The repo lives at
-`/iopsstor/scratch/cscs/dlu/iclr/spir-m1` instead**, because `/capstor/scratch/cscs/dlu` is at
-**306.9 % of its 1 000 000-inode quota with the grace period expired**, so file *creation* there
-fails with `EDQUOT` (reproduced with `touch`). Reads are unaffected, so the conda base, FlashSO2
-and fairchem remain readable in place. Approved at Gate 0 review; recorded as DECISIONS.md D1.
+The work order specifies `/capstor/scratch/cscs/dlu/iclr/spir-m1`. The repo lives at
+**`/iopsstor/scratch/cscs/dlu/iclr/zippel`**, which is two separate changes, both approved at Gate
+0 review and recorded separately:
+
+1. **Filesystem** `/capstor` → `/iopsstor` (DECISIONS.md D1), because `/capstor/scratch/cscs/dlu`
+   is at **306.9 % of its 1 000 000-inode quota with the grace period expired**, so file
+   *creation* there fails with `EDQUOT` (reproduced with `touch`). Reads are unaffected, so the
+   conda base, FlashSO2 and fairchem remain readable in place.
+2. **Directory name** `spir-m1` → `zippel` (DECISIONS.md D14), to match the git remote
+   `git@github.com:denghuilu/zippel.git`. The environment-variable prefix moved with it
+   (`ZIPPEL_ROOT`, `ZIPPEL_ENV`, `ZIPPEL_CACHE_ROOT`). The conda environment keeps its original
+   name, `spir`.
 
 **Every compiler/JIT cache is project-local under that repo, on `/iopsstor`** — verified by
 `tests/test_environment.py`, which fails if any resolves off `/iopsstor`, onto `/capstor`, or onto
@@ -82,7 +89,7 @@ inductor was caching to node-local `/tmp`, which Alps purges), and `TRITON_CACHE
 inheriting `~/.bashrc`'s *shared* `/iopsstor/scratch/cscs/dlu/.cache/triton` — on the right
 filesystem, but not self-contained, so "reproducible from a clean clone" would have depended on
 another project's cache. `tests/conftest.py` now sets these **unconditionally** rather than via
-`setdefault`, with `SPIR_M1_CACHE_ROOT` as the deliberate override.
+`setdefault`, with `ZIPPEL_CACHE_ROOT` as the deliberate override.
 
 **One cache is deliberately not redirected:** `CUDA_CACHE_PATH`, which Alps points at
 `/dev/shm/dlu/cuda_cache` (node-local RAM). It holds driver-level PTX→SASS JIT results, which our

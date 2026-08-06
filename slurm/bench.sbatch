@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH --job-name=spir-m1-bench
+#SBATCH --job-name=zippel-bench
 #SBATCH --account=lp16
 #SBATCH --partition=normal
 #SBATCH --time=04:00:00
@@ -19,7 +19,7 @@
 # than packed, so nothing else on the node perturbs the measurement.
 
 set -euo pipefail
-cd "${SLURM_SUBMIT_DIR:-$(dirname "$0")/..}"
+cd "${ZIPPEL_ROOT:-/iopsstor/scratch/cscs/dlu/iclr/zippel}"
 mkdir -p slurm/logs bench/results
 
 source env.sh

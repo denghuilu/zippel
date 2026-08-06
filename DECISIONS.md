@@ -5,6 +5,7 @@ One dated line per deviation from the M1 work order: what changed, why.
 ## 2026-08-06 — Phase 0 setup
 
 - **D1. Repo root moved `/capstor/scratch/cscs/dlu/iclr/spir-m1` → `/iopsstor/scratch/cscs/dlu/iclr/spir-m1`.**
+  (The directory was later renamed to `zippel`; see D14.)
   `/capstor/scratch/cscs/dlu` is at 306.9 % of its 1,000,000-inode quota with grace **expired**;
   file creation fails with EDQUOT (reproduced: `touch: cannot touch '.../.spir_probe/t': Disk quota
   exceeded`). `/iopsstor/scratch/cscs/dlu` is writable with 727 T free and no file limit. Reads from
@@ -121,3 +122,32 @@ One dated line per deviation from the M1 work order: what changed, why.
   unavailable at this config. If a fused-kernel forward anchor turns out to be needed in Phase 2,
   the option is a *secondary* lmax = 4 configuration used only as an anchor, never mixed into the
   headline lmax = 2 table. Not pursued unless Phase 2 requires it.
+
+## 2026-08-06 — repository rename
+
+- **D14. Working tree renamed `spir-m1` → `zippel`, and the git remote is
+  `git@github.com:denghuilu/zippel.git`.** Instructed at Gate 0 review after the remote was
+  created. Absolute paths updated in `env.sh`, `tests/conftest.py`, `tests/test_environment.py`,
+  `bench/count_launches.py` and `slurm/bench.sbatch`, and the environment-variable prefix renamed
+  `SPIR_M1_* → ZIPPEL_*` (`ZIPPEL_ROOT`, `ZIPPEL_ENV`, `ZIPPEL_CACHE_ROOT`) so a repo called
+  `zippel` does not carry `SPIR_M1_CACHE_ROOT` in its cache configuration.
+
+  Three references to `spir-m1` are kept deliberately, as historical record rather than oversight:
+  D1 above and REPORT.md §1 both quote the work order's original `/capstor/.../spir-m1` path, and
+  PLAN.md's deviations table records the path as approved at planning time. D1's *target* was
+  restored to `.../spir-m1` so it describes only the Gate-0 filesystem move; this entry records
+  the later rename, keeping the two decisions separate.
+
+  **JIT caches were deleted, not moved.** Cached compiler artifacts can key on absolute source
+  paths, so carrying them across a path change risks a stale hit — precisely the silent-re-JIT
+  failure mode the cache pinning exists to prevent. They rebuild on first use.
+
+  `slurm/bench.sbatch` now `cd`s to `${ZIPPEL_ROOT:-/iopsstor/scratch/cscs/dlu/iclr/zippel}`
+  rather than relying on `SLURM_SUBMIT_DIR`, so a job submitted from anywhere lands in the repo.
+
+  The conda environment keeps its name `spir` at `/iopsstor/scratch/cscs/dlu/envs/spir`: it was
+  named by explicit instruction, renaming it is slow and risks breaking the working torch 2.13 /
+  CuTe DSL stack, and nothing depends on its name matching the repo's. `ZIPPEL_ENV` points at it.
+
+  Note this is a deviation from the work order's scope fence ("No new project names or
+  branding"); it is a direct instruction from the reviewer, recorded here rather than silently.

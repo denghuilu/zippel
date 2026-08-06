@@ -10,7 +10,7 @@ import sys
 import torch
 from torch.profiler import ProfilerActivity, profile
 
-sys.path.insert(0, "/iopsstor/scratch/cscs/dlu/iclr/spir-m1")
+sys.path.insert(0, "/iopsstor/scratch/cscs/dlu/iclr/zippel")
 
 from baselines.common import load_block_and_batch, make_step, precision_context
 

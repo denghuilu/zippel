@@ -112,10 +112,10 @@ returns a tuple instead of `cat`, envelope always applied, `GateActivation(m_pri
 
 ## Deliverable layout
 
-Repo root **`/iopsstor/scratch/cscs/dlu/iclr/spir-m1`**, `git init` immediately.
+Repo root **`/iopsstor/scratch/cscs/dlu/iclr/zippel`**, `git init` immediately.
 
 ```
-spir-m1/
+zippel/
   PLAN.md  DECISIONS.md  REPORT.md  requirements.lock
   spir/       ir.py  interp.py  vjp.py  pit.py
   blocks/     eso2_ref.py  eso2_spir.py

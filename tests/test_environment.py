@@ -45,9 +45,9 @@ def test_jit_cache_is_project_local(var):
     """Caches live under this repo, so a clean clone reproduces without shared state.
 
     `~/.bashrc` exports a shared TRITON_CACHE_DIR; conftest overrides it unconditionally
-    for exactly this reason. Honours SPIR_M1_CACHE_ROOT if set deliberately.
+    for exactly this reason. Honours ZIPPEL_CACHE_ROOT if set deliberately.
     """
-    root = pathlib.Path(os.environ.get("SPIR_M1_CACHE_ROOT", ROOT / ".jit-cache")).resolve()
+    root = pathlib.Path(os.environ.get("ZIPPEL_CACHE_ROOT", ROOT / ".jit-cache")).resolve()
     resolved = pathlib.Path(os.environ[var]).resolve()
     assert str(resolved).startswith(str(root)), f"{var}={resolved} is outside {root}"
 

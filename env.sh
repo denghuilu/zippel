@@ -1,5 +1,5 @@
-# Source this before running anything in spir-m1.
-#   source /iopsstor/scratch/cscs/dlu/iclr/spir-m1/env.sh
+# Source this before running anything in zippel.
+#   source /iopsstor/scratch/cscs/dlu/iclr/zippel/env.sh
 #
 # EVERY compiler/JIT cache is pinned project-local, under the repo on /iopsstor.
 #
@@ -14,18 +14,18 @@
 # ~/.bashrc TRITON_CACHE_DIR=/iopsstor/scratch/cscs/dlu/.cache/triton) is not
 # self-contained: "reproducible from a clean clone" has to mean this repo's own cache.
 #
-# Override the root with SPIR_M1_CACHE_ROOT if you really want a shared cache.
+# Override the root with ZIPPEL_CACHE_ROOT if you really want a shared cache.
 
-export SPIR_M1_ROOT=/iopsstor/scratch/cscs/dlu/iclr/spir-m1
-export SPIR_M1_ENV=/iopsstor/scratch/cscs/dlu/envs/spir
-export SPIR_M1_CACHE_ROOT="${SPIR_M1_CACHE_ROOT:-$SPIR_M1_ROOT/.jit-cache}"
+export ZIPPEL_ROOT=/iopsstor/scratch/cscs/dlu/iclr/zippel
+export ZIPPEL_ENV=/iopsstor/scratch/cscs/dlu/envs/spir
+export ZIPPEL_CACHE_ROOT="${ZIPPEL_CACHE_ROOT:-$ZIPPEL_ROOT/.jit-cache}"
 
-export CUTE_DSL_CACHE_DIR="$SPIR_M1_CACHE_ROOT/cute_dsl"
-export TRITON_CACHE_DIR="$SPIR_M1_CACHE_ROOT/triton"
-export QUACK_CACHE_DIR="$SPIR_M1_CACHE_ROOT/quack"
-export TORCHINDUCTOR_CACHE_DIR="$SPIR_M1_CACHE_ROOT/inductor"
-export PYTHONPYCACHEPREFIX="$SPIR_M1_CACHE_ROOT/pycache"
-export TMPDIR="$SPIR_M1_CACHE_ROOT/tmp"
+export CUTE_DSL_CACHE_DIR="$ZIPPEL_CACHE_ROOT/cute_dsl"
+export TRITON_CACHE_DIR="$ZIPPEL_CACHE_ROOT/triton"
+export QUACK_CACHE_DIR="$ZIPPEL_CACHE_ROOT/quack"
+export TORCHINDUCTOR_CACHE_DIR="$ZIPPEL_CACHE_ROOT/inductor"
+export PYTHONPYCACHEPREFIX="$ZIPPEL_CACHE_ROOT/pycache"
+export TMPDIR="$ZIPPEL_CACHE_ROOT/tmp"
 mkdir -p "$CUTE_DSL_CACHE_DIR" "$TRITON_CACHE_DIR" "$QUACK_CACHE_DIR" \
          "$TORCHINDUCTOR_CACHE_DIR" "$PYTHONPYCACHEPREFIX" "$TMPDIR"
 
@@ -42,7 +42,7 @@ export TORCHINDUCTOR_COMPILE_THREADS="${TORCHINDUCTOR_COMPILE_THREADS:-1}"
 
 # Never let ~/.local/lib site-packages shadow the env (Alps /users is a separate quota).
 export PYTHONNOUSERSITE=1
-export PYTHONPATH="$SPIR_M1_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$ZIPPEL_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 source /capstor/scratch/cscs/dlu/miniforge3/etc/profile.d/conda.sh
-conda activate "$SPIR_M1_ENV"
+conda activate "$ZIPPEL_ENV"
