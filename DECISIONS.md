@@ -184,3 +184,20 @@ One dated line per deviation from the M1 work order: what changed, why.
   all-zeros index is a segment sum, already in the vocabulary — so closure is unaffected. The
   transform takes a `zero_index` map from segment name to such a buffer.
 
+- **D19. Axis selection and scalar placement are contractions against a static unit operand,
+  not slice-and-reduce.** Extracting component `i` of an edge vector as a rank-0 scalar is
+  naturally written `"x->"` with the operand sliced to `[i:i+1]` — but that sums an index
+  appearing in only one operand, which the vocabulary rejects because its transpose needs a
+  broadcast (docs/ir.md 2.1). The same problem appears in reverse when placing a scalar into a
+  1x1 slot of a matrix: `"->ij"` produces indices no operand supplies.
+
+  Both are solved the same way, without touching the vocabulary: contract against a
+  `none`-segment buffer of ones (`unit`, shape [1,1]; `unit_mat`, shape [1,1,1]). Selection
+  becomes `"x,x->"` and placement becomes `",ij->ij"`, so every index is supplied by some
+  operand and every transpose is an ordinary contraction. This is philosophically the right
+  shape for this IR anyway — selection *is* a contraction against a static coefficient table,
+  which is what "segmented polynomial" means.
+
+  Worth recording because it was found by the type checker rejecting three successive
+  formulations, not by design: the restriction in 2.1 is doing real work.
+
