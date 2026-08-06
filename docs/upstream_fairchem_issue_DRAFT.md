@@ -1,0 +1,126 @@
+# DRAFT — upstream issue for fairchem. **Not filed.** For review before submission.
+
+Status: localization measurement pending (see the TODO block at the end); the numbers below
+marked `[PENDING]` must be filled in from `bench/safeacos_localization.py` before this is
+considered ready to send.
+
+---
+
+**Title:** `Safeacos` silently produces an incorrect second derivative (affects conservative
+force training)
+
+**Labels:** bug, autograd
+
+### Summary
+
+`Safeacos` in `fairchem/core/models/uma/common/rotation.py` returns correct values and correct
+first derivatives, but an **incorrect second derivative**, with no error or warning. Models
+trained with a force term in the loss — i.e. conservative (gradient) force training, which
+backpropagates through `F = -dE/dpos` — take a wrong gradient signal through the `beta` Euler
+angle of the edge frame.
+
+### Cause
+
+```python
+class Safeacos(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        x_clamped = x.clamp(-1 + EPS, 1 - EPS)
+        ctx.save_for_backward(x_clamped)     # <-- computed inside forward, i.e. under no_grad
+        return torch.acos(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (x_clamped,) = ctx.saved_tensors
+        denom = torch.sqrt(1 - x_clamped.pow(2)).clamp(min=EPS)
+        return -grad_output / denom
+```
+
+The body of `Function.forward` runs with grad disabled, so `x_clamped` is a plain tensor with no
+`grad_fn` and `requires_grad=False`. The returned gradient therefore depends on `grad_output`
+*differentiably*, but on `x` **not at all** — as far as autograd is concerned, `d(acos)/dx` is a
+constant with respect to `x`. Differentiating a second time drops the
+`d²/dx² acos(x) = -x * (1-x²)^(-3/2)` contribution entirely.
+
+`Safeatan2` in the same file does not have this problem: it saves the raw inputs `y, x` (which do
+carry graph) rather than a value computed inside `forward`.
+
+### Reproducer
+
+```python
+import torch
+from fairchem.core.models.uma.common.rotation import Safeacos
+
+x = torch.randn(64, dtype=torch.float64).clamp(-0.9, 0.9).requires_grad_(True)
+
+# Safeacos: the first derivative does not depend on x, so this raises
+out = Safeacos.apply(x).sum()
+(g,) = torch.autograd.grad(out, x, create_graph=True)
+torch.autograd.grad(g.square().sum(), x)
+# RuntimeError: element 0 of tensors does not require grad and does not have a grad_fn
+
+# torch.acos on a clamped input: works, and is the correct value
+xc = x.detach().clamp(-1 + 1e-7, 1 - 1e-7).requires_grad_(True)
+out = torch.acos(xc).sum()
+(g,) = torch.autograd.grad(out, xc, create_graph=True)
+(gg,) = torch.autograd.grad(g.square().sum(), xc)   # fine
+```
+
+In the full rotation path the error does not surface as an exception, because `x` still reaches
+the output through `Safeatan2` and the normalisation — the second derivative is silently
+*incomplete* rather than absent. Measured on one GH200 in FP64, contracting the Wigner matrices
+with fixed vectors (`u^T W(pos) v`, chosen to be direction-dependent — note `||W v||^2` and
+`sum(W^2)` are rotation-invariant and give a vacuous ~1e-15 agreement):
+
+| quantity | `Safeacos` | double-differentiable `acos` | agreement |
+|---|---|---|---|
+| E | 23.47743315 | 23.47743315 | exact |
+| ‖F‖ | 20.71385 | 20.71385 | 8.9e-16 |
+| ‖∂²‖ | **3103.208** | **3091.557** | **5.5 % relative** |
+
+A second random configuration gave 7.1 %, so the magnitude is input-dependent rather than a fixed
+offset. `[PENDING: interior-vs-clamp-band localization result]`
+
+### Suggested fix
+
+Save the *input*, not a value computed inside `forward`, and clamp in `backward`:
+
+```python
+class Safeacos(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        ctx.save_for_backward(x)
+        return torch.acos(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        (x,) = ctx.saved_tensors
+        denom = torch.sqrt(1 - x.clamp(-1 + EPS, 1 - EPS).pow(2)).clamp(min=EPS)
+        return -grad_output / denom
+```
+
+Because the clamp now happens inside `backward`, it is part of the differentiable graph and the
+second derivative is recovered. (A `torch.autograd.gradgradcheck` on `Safeacos.apply` would have
+caught this and would guard against regressions.)
+
+### Impact
+
+- Direct-force models are unaffected (no second derivative is taken).
+- **Conservative / gradient-force training is affected**: the loss backpropagates through `F`, so
+  the parameter updates receive a wrong contribution from the edge-frame `beta` angle.
+- Energies and forces at inference are unaffected.
+
+### Environment
+
+fairchem-core 2.11.0, torch 2.13.0+cu130, CUDA 13.0, NVIDIA GH200 (sm_90a), aarch64, Python 3.13.
+
+---
+
+## TODO before this is sendable
+
+1. Fill in the interior-vs-clamp-band localization: does the discrepancy appear only for inputs
+   within `EPS` of ±1 (i.e. only where the clamp is active), or across the interior as well?
+   The interior case is the more serious one and changes how the issue should be framed.
+2. Re-check against fairchem `main`, not just 2.11.0 — the file may have changed.
+3. Search existing fairchem issues for a duplicate before filing.
+4. Decide whether to include the `gradgradcheck` regression test as a PR alongside the report.
