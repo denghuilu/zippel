@@ -317,43 +317,64 @@ Wigner blocks are orthogonal. Every output row is live and E remains exactly rot
 
 ## 5. Gate 0 baseline table
 
-> ## ⚠ EVERY TIMING IN THIS SECTION IS **PROVISIONAL**
->
-> All numbers below were measured on the **shared login node** `daint-ln001`, whose four GH200s
-> are visible to other users. They are stable enough to reason about (IQR ≤ 2.3 ms on every
-> completed row) but are **not** the reported result: one si_small repeat showed IQR jump from
-> 0.38 ms to 13.76 ms under contention, and a B2 eager control drifted 29 → 43 ms between runs
-> for the same reason.
->
-> **`sbatch slurm/bench.sbatch` on an exclusive node replaces every number here**, and records
-> NVML SM clocks alongside each measurement so throttling is visible. Until that run lands, treat
-> medians as indicative and IQRs as lower bounds on the true spread.
->
-> **Units are GiB** (2³⁰ bytes) throughout, per DECISIONS.md D13.
->
-> **B3's timings come from a different interpreter** — torch 2.11.0 rather than the stack's
-> 2.13.0, because cuEquivariance's ops extension will not load against 2.13 — so B3 rows are not
-> directly comparable to B1/B2 rows. B3 therefore carries its own eager control measured in that
-> same interpreter, and only the B3/control *ratio* is meaningful. See §5, B3.
+### Measurement provenance
 
-**B1 — eager PyTorch**, conservative training step, median of 100 iters (30 at the 50 k fixtures).
-Measured on the **regenerated canonical fixtures** (DECISIONS.md D11), which is why edge counts
-differ slightly from earlier drafts:
+Every `Measurement` records `host`, `slurm_job` and `exclusive`. The numbers below come from
+**job 4376140 on `nid005332`, exclusive, 35 min** — the definitive run that closes standing
+thread (a). Units are **GiB** (2³⁰).
+
+> **The small fixtures are not reproducible and are reported as a range, not a number.**
+> Two *exclusive-node* runs of the identical configuration disagree by 80 %:
+>
+> | si_small fp32 | median | IQR | SM clock |
+> |---|---|---|---|
+> | job 4376123 | 29.79 ms | 0.23 | 1980 MHz |
+> | job 4376140 | 53.67 ms | 15.96 | 1980 MHz |
+>
+> Clocks were pinned at maximum in both, so this is neither throttling nor another tenant.
+> These steps are **host-dispatch-bound** — roughly 3 500 kernel launches in 30–55 ms, i.e.
+> ~10 µs per launch — so host-side scheduling dominates and the GPU is mostly idle. The medium
+> fixtures, which are device-bound, are stable to 0.3 % across the same two runs
+> (si_medium fp32: 312.10 vs 312.31 ms). **si_medium is the primary fixture and the one any
+> claim should rest on.** No attempt was made to tune the small-fixture numbers into looking
+> better; the instability is itself evidence for the launch-bound diagnosis.
+>
+> **B3's timings come from a different interpreter** (torch 2.11.0, since cuEquivariance's ops
+> extension will not load against 2.13), so B3 rows are not comparable to B1/B2 rows. B3 carries
+> its own eager control in that interpreter; only the ratio is meaningful. See §5, B3.
+
+**B1 — eager PyTorch**, conservative training step, median of 100 iters (30 at the 50 k
+fixtures), job 4376140:
 
 | fixture | atoms | edges | fp32 ms | tf32 ms | bf16 ms | fp32 peak GiB | bf16 peak GiB |
 |---|---|---|---|---|---|---|---|
-| si_small | 216 | 9 576 | 29.19 | 31.13 | 32.25 | 1.48 | 0.85 |
-| cu_small | 256 | 19 966 | 36.06 | 31.16 | 31.57 | 3.00 | 1.68 |
-| **si_medium** | **5 832** | **259 474** | **312.10** | **217.36** | **191.56** | **38.13** | **20.91** |
-| cu_medium | 5 324 | 415 272 | 500.28 | 347.51 | 305.15 | 60.90 | 33.35 |
+| si_small *(unstable)* | 216 | 9 576 | 53.67 | 44.92 | 57.44 | 1.48 | 0.85 |
+| cu_small *(unstable)* | 256 | 19 966 | 56.68 | 66.89 | 62.50 | 3.00 | 1.68 |
+| **si_medium** | **5 832** | **259 474** | **312.31** | **217.66** | **191.96** | **38.13** | **20.91** |
+| cu_medium | 5 324 | 415 272 | 499.07 | 347.17 | 305.04 | 60.90 | 33.35 |
 | si_large | 46 656 | 2 075 158 | **OOM** | OOM | OOM | — | — |
 | cu_large | 48 668 | 3 796 130 | **OOM** | OOM | OOM | — | — |
 
-IQR ≤ 2.33 ms on every completed row. SM clocks 1815–1980 MHz (no throttling observed).
+IQR ≤ 2.28 ms on every medium row (≤ 1.0 %); 9.9–18.5 ms on the small rows (16–39 %).
 
-Re-measuring on the regenerated fixtures moved nothing materially — si_medium fp32 312.24 → 312.10
-ms, cu_medium fp32 500.44 → 500.28 ms — which is the expected outcome given the fixtures changed
-only in seed, wrapping and neighbour-list backend, not in size or physics.
+### Secondary metric: max batch (GiB budgets)
+
+Binary search over the replication factor of si_medium against a *measured* peak allocation:
+
+| precision | budget | k | atoms | measured peak GiB |
+|---|---|---|---|---|
+| fp32 | primary 80 GiB | 2 | 11 664 | 76.22 |
+| fp32 | full card 95.6 GiB | 2 | 11 664 | 76.22 |
+| bf16 | primary 80 GiB | 3 | 17 496 | 62.59 |
+| bf16 | full card 95.6 GiB | 4 | 23 328 | 83.43 |
+
+fp32 cannot reach k = 3 under either budget: one medium cell already costs 38.13 GiB, so the
+third copy would exceed the card. That is the same memory wall the 50 k fixtures hit, restated
+as a batch limit.
+
+Re-measuring on the regenerated fixtures moved nothing materially at the medium sizes, which is
+the expected outcome given the fixtures changed only in seed, wrapping and neighbour-list backend,
+not in size or physics.
 
 Two results here matter for the bet:
 
@@ -834,7 +855,7 @@ algebraic extension rather than a transcendental one. Full write-up in
 
 | thread | status |
 |---|---|
-| (a) exclusive-node sbatch replacing the PROVISIONAL Gate 0 table | job 4376123 completed, but its results were **corrupted** by a concurrent login-node run (§8.7). Re-run 4376140 in flight |
+| (a) exclusive-node sbatch replacing the PROVISIONAL Gate 0 table | **closed.** Job 4376140 on `nid005332`, exclusive, 35 min, 7/7 stages. §5 now carries its numbers, with the small fixtures reported as unstable rather than as a number |
 | (b) cuEq trigger isolation + updated draft issue | not started |
 | (c) `math_dtype` finding split into its own repro + draft | not started |
 | (d) `findings/` ledger | started: `vocabulary-shrink.md`, `pit-exactness.md` |

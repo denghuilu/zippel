@@ -1,0 +1,46 @@
+[
+  {
+    "fixture": "si_medium",
+    "precision": "fp32",
+    "budget": "primary_80GiB",
+    "budget_gib": 80.0,
+    "atoms": 11664,
+    "edges": 518948,
+    "k": 2,
+    "peak_gib": 76.2241096496582,
+    "note": ""
+  },
+  {
+    "fixture": "si_medium",
+    "precision": "fp32",
+    "budget": "secondary_full_card_95.6GiB",
+    "budget_gib": 95.6,
+    "atoms": 11664,
+    "edges": 518948,
+    "k": 2,
+    "peak_gib": 76.22359371185303,
+    "note": ""
+  },
+  {
+    "fixture": "si_medium",
+    "precision": "bf16",
+    "budget": "primary_80GiB",
+    "budget_gib": 80.0,
+    "atoms": 17496,
+    "edges": 778422,
+    "k": 3,
+    "peak_gib": 62.58660936355591,
+    "note": ""
+  },
+  {
+    "fixture": "si_medium",
+    "precision": "bf16",
+    "budget": "secondary_full_card_95.6GiB",
+    "budget_gib": 95.6,
+    "atoms": 23328,
+    "edges": 1037896,
+    "k": 4,
+    "peak_gib": 83.4276180267334,
+    "note": ""
+  }
+]

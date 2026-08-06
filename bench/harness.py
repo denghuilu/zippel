@@ -130,7 +130,10 @@ def time_training_step(
         torch.cuda.empty_cache()
         return Measurement(label, fixture, precision, float("nan"), float("nan"),
                            float("nan"), float("nan"), float("nan"), 0, atoms, edges,
-                           notes=notes, error="OOM")
+                           notes=notes, error="OOM",
+                           host=socket.gethostname(),
+                           slurm_job=os.environ.get("SLURM_JOB_ID", ""),
+                           exclusive=bool(os.environ.get("SLURM_JOB_ID")))
 
     samples.sort()
     return Measurement(
