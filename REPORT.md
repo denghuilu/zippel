@@ -641,7 +641,7 @@ this config (DECISIONS.md D10).
 Green (`pytest`, FP64 unless noted):
 
 ```
-
+61 passed in 6.33s
 ```
 
 - reference ≡ fairchem (table §3)
