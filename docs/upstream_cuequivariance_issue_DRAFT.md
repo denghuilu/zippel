@@ -9,7 +9,10 @@
 
 ### Summary
 
-When two or more paths of a `SegmentedTensorProduct` accumulate into the **same output
+> **Mechanism wording is kept in sync with `findings/compiled-ran-clean-wrong.md`**, which is the single source of truth for this defect's one-line description. Edit there first.
+
+`indexed_linear` does not accumulate paths that share an output segment. When two or more paths
+of a `SegmentedTensorProduct` accumulate into the **same output
 segment**, `method="indexed_linear"` returns a different result from `method="fused_tp"` and
 `method="naive"` on identical inputs. `fused_tp` and `naive` agree with each other and with a
 hand-written transcription of the descriptor semantics; `indexed_linear` does not. No error or

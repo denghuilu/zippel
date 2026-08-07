@@ -1008,6 +1008,33 @@ to its bound, only that no *structural* error is present; a bug that shifted the
 ulps would pass, and no test here asserts otherwise. T1's separate bit-equality assertion is the
 tight check, and it applies wherever the summation orders genuinely coincide.
 
+### 8.5b-bis Two classes of contract
+
+The checks in this pipeline fall into two kinds, and keeping them distinct is what stops either
+from being asked to do the other's job.
+
+**Structural contracts** are exact and run *before* anything executes: the IR type checker,
+`assert_closed`, the Kahn acyclicity guard on the fusion partition, the register-budget
+precondition, and `MetadataMismatch` on a generated module's declared `SEGMENT` /
+`REDUCTION_DEPTH`. They answer "is this a well-formed thing to run at all", they admit no
+tolerance, and their failures are absolute. The unschedulable 107-launch partition was a
+structural failure, and it went unnoticed precisely because no structural check existed for it —
+every *numerical* test passed throughout, since the partition never affected a computed value.
+
+**Numerical contracts** are bounded and run *after* execution: the per-kernel ordering bound,
+checked as `measured ≤ bound` on every emitted kernel. They answer "did this compute what it
+claimed", they are inherently approximate, and their bound is derived from the schedule rather
+than chosen. `invar_101` was a numerical failure — well-formed, well-typed, correctly
+partitioned, and wrong by 4.47e+00.
+
+The planted-fault battery certifies the numerical layer only: emitter faithfulness *given a
+correct schedule*. A fault introduced during schedule construction would be inherited by both the
+kernel and its bound, which would then agree; that layer belongs to the structural contracts.
+
+This is the L1/L3 verification architecture in miniature — cheap exact checks on structure,
+bounded checks on values — arrived at here by having been bitten once at each layer rather than
+by design.
+
 ### 8.5c A calibrated traffic model, and an instrument blocker
 
 D24 established that bytes, not FLOPs, are the mechanism, so Phase 2's objective function is a

@@ -12,8 +12,12 @@ force training)
 
 ### Summary
 
-`Safeacos` in `fairchem/core/models/uma/common/rotation.py` returns correct values and correct
-first derivatives, but an **incorrect second derivative**, with no error or warning. Models
+> **Mechanism wording is kept in sync with `findings/compiled-ran-clean-wrong.md`**, which is the single source of truth for this defect's one-line description. Edit there first.
+
+`Safeacos.forward` saves a `clamp`ed tensor under no-grad, so the second derivative loses its
+dependence on `x`. `Safeacos` in `fairchem/core/models/uma/common/rotation.py` therefore returns
+correct values and correct first derivatives, but an **incorrect second derivative**, with no
+error or warning. Models
 trained with a force term in the loss — i.e. conservative (gradient) force training, which
 backpropagates through `F = -dE/dpos` — take a wrong gradient signal through the `beta` Euler
 angle of the edge frame.

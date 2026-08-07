@@ -22,6 +22,20 @@ Fault classes, chosen to match defects that actually occurred in this project:
 
 `SEGMENT` is caught at *load*, by metadata validation, and never reaches the bound. That is the
 intended division: launch geometry is a contract violation, not a numerical one.
+
+**What this battery certifies, and what it does not.** It certifies **emitter faithfulness given
+a correct schedule**: that the CuTe DSL text produced from a schedule computes what that schedule
+says, and that a discrepancy is detected. It does *not* certify that the schedule itself is the
+right schedule. A fault introduced during schedule *construction* -- a mis-partitioned group, a
+mislabelled segment, a wrong template choice -- is invisible here, because both the kernel and
+the bound would be derived from the same wrong schedule and would agree with each other.
+
+That layer is covered separately, by the structural contracts: the Kahn acyclicity guard on the
+partition (`tests/test_ir_core.py`), the IR type checker, `assert_closed`, the register-budget
+precondition, and `MetadataMismatch` at load. Those are exact, pre-run checks; this battery is
+the post-run numerical one. Neither subsumes the other, and saying so is the point -- the
+`invar_101` class lives in the emitter layer, and the 107-launch class lived in the structural
+one.
 """
 
 from __future__ import annotations
