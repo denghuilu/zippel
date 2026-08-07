@@ -956,9 +956,9 @@ algebraic extension rather than a transcendental one. Full write-up in
 | thread | status |
 |---|---|
 | (a) exclusive-node sbatch replacing the PROVISIONAL Gate 0 table | **closed.** Job 4376140 on `nid005332`, exclusive, 35 min, 7/7 stages. §5 now carries its numbers, with the small fixtures reported as unstable rather than as a number |
-| (b) cuEq trigger isolation + updated draft issue | not started |
-| (c) `math_dtype` finding split into its own repro + draft | not started |
-| (d) `findings/` ledger | started: `vocabulary-shrink.md`, `pit-exactness.md` |
+| (b) cuEq trigger isolation + updated draft issue | **closed.** `bench/cueq_isolate.py`; the trigger is **two or more paths accumulating into one output segment** — my three named candidates (weight reuse, negative coefficients, path count) are each individually fine at ~1e-16. Draft rewritten against hand-built descriptors → `findings/cueq-indexed-linear-trigger.md` |
+| (c) `math_dtype` finding split into its own repro + draft | **closed, and it refuted my own Gate 0 claim.** `bench/cueq_math_dtype.py`: `indexed_linear` does *not* silently compute in FP32 — it computes at operand precision exactly (0.00e+00 in FP64) and ignores requests to *reduce* precision. The real finding is a three-way contract disagreement → `findings/cueq-math-dtype.md` |
+| (d) `findings/` ledger | 5 entries: `vocabulary-shrink.md`, `pit-exactness.md`, `self-halved-derivative.md`, `cueq-indexed-linear-trigger.md`, `cueq-math-dtype.md` |
 | (e) rename + push, remote `main` and `gate-0` verified | done — both refs confirmed on the remote |
 
 ### 8.7 A measurement-integrity failure, and the fix
