@@ -1,6 +1,6 @@
 # Keyed by identity: one bug, four times
 
-**Status: stands.** My bug, three separate instances, each caught by a different mechanism.
+**Status: stands.** My bug, four separate instances, each caught by a different mechanism.
 
 ## The shape
 
@@ -53,10 +53,12 @@ The three detections are more interesting than the three bugs:
   ordering bound simply refuses any kernel that disagrees with its schedule by more than
   reordering explains.
 
-Only #3's mechanism scales, because only it requires no one to have anticipated the failure. That
-is the argument for the bound (D25) restated from a different direction, and it is why the
-planted-fault battery exists — a check that has never fired is indistinguishable from one that
-cannot.
+* #4 was caught by the **standing audit this document instituted**, on its first run.
+
+Only #3's mechanism scales without anyone anticipating the failure — that is the argument for the
+bound (D25) from a different direction, and why the planted-fault battery exists. #4's mechanism
+scales only as far as someone keeps running the audit, which is exactly as far as I keep
+remembering to.
 
 ## Standing action
 
