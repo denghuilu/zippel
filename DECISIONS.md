@@ -669,3 +669,37 @@ T3 but overestimates for T2 by the channel extent, since T2's channel axis is sy
 cap is conservative for T2 groups and cannot shrink a single op that is already wide --
 `conv1_90` alone is 655 744 volume and no cap splits it. Volume is a proxy, and where it is a bad
 one is written down rather than discovered later.
+
+## 2026-08-07 — D37: the rotin measurement lands; D35's extrapolation overpredicted 2.1x.
+
+D35 left the widest forward group running specifically to convert its extrapolation into a
+measurement. It has.
+
+| | terms | compile | correctness |
+|---|---|---|---|
+| predicted (D35, `terms^1.97`) | 23 040 | 6 563 s = 109 min | — |
+| **measured** | 23 040 | **3 085 s = 51.4 min** | **0.00e+00** — bit-exact |
+
+**Overpredicted by 2.1x.** Refitting with the measured point included:
+
+    compile_s = 3.00e-5 * terms^1.87      R^2 0.942   (was 1.63e-5 * terms^1.97, R^2 0.903)
+
+The exponent drops from 1.97 to 1.87 and the fit improves, which is the expected shape: an
+extrapolation 4.5x beyond the largest measured point was leaning on the tail of a fit whose
+R^2 was 0.903. **[measurement, superseding extrapolation]**
+
+**What does not change.** Compile is still strongly superlinear and still dominates: 51 minutes
+for one group against 8 minutes for the other 47 combined under the D36 cap. D35's decision — cap
+fusion width — and D36's finding — the fusion inverts the template — both stand on the measured
+number as firmly as on the extrapolated one. The cap buys roughly 6x rather than 13x, and 6x is
+still the difference between a measurable S1c and an unmeasurable one.
+
+**What this says about my own numbers.** I reported 109 minutes to review as a prediction and
+labelled it as one, and it was wrong by a factor of two. The lesson is not that the extrapolation
+was illegitimate — it was the only number available and it drove a decision that survives
+measurement — but that a fit extrapolated 4.5x beyond its data earns a wide error bar, and I gave
+it none. Where a prediction drives a decision that can wait for a measurement, the measurement
+should be taken; that is why this one was left running, and it is the practice to keep.
+
+Also worth recording: `rotin` at 23 040 terms is **bit-exact**, 0.00e+00 against the FP64
+interpreter, which is the largest single kernel this compiler has produced.

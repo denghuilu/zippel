@@ -1,0 +1,34 @@
+{
+  "program": "fwd",
+  "fixture": "si_small",
+  "sizes": {
+    "node": 216,
+    "edge": 9576,
+    "graph": 1
+  },
+  "rows": [
+    {
+      "group": 35,
+      "template": "T3",
+      "terms": 23040,
+      "bound": 2.2995757017034047e-14,
+      "measured": 0.0,
+      "status": "ok",
+      "schedule_s": 0.1470677049983351,
+      "emit_s": 0.044438865003030514,
+      "guard_s": 59.052791244997934,
+      "compile_s": 3085.3951377179983
+    }
+  ],
+  "costs": {
+    "totals_s": {
+      "schedule": 20.796077012979367,
+      "emit": 0.044438865003030514,
+      "compile": 3085.3951377179983,
+      "guard": 59.052791244997934
+    },
+    "total_s": 3165.2884448409786,
+    "guard_fraction": 0.01865636964026029,
+    "kernels": 48
+  }
+}

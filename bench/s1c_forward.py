@@ -62,7 +62,9 @@ def main():
     print("launched\n", flush=True)
 
     energy = meta["energy"]
-    got, want = env[energy], ref[energy]
+    # the interpreter may run on a different device than the composed program; compare on one
+    got = env[energy]
+    want = ref[energy].to(got.device)
     rel = float((got - want).abs().max() / want.abs().max().clamp_min(1e-300))
     print(f"{'buffer':>14} {'rel err':>11}")
     print(f"{energy:>14} {rel:>11.3e}   <- program output")
@@ -72,16 +74,17 @@ def main():
     for g in cp.groups:
         for b in g.live_out:
             if b in ref and ref[b].numel():
-                scale = float(ref[b].abs().max())
-                e = float((env[b] - ref[b]).abs().max())
+                r = ref[b].to(env[b].device)
+                scale = float(r.abs().max())
+                e = float((env[b] - r).abs().max())
                 worst.append((e / scale if scale else e, b, g.template))
     worst.sort(reverse=True)
     for e, b, t in worst[:5]:
         print(f"{b:>14} {e:>11.3e}   {t}")
 
     ok = rel < 1e-10 and (not worst or worst[0][0] < 1e-10)
-    print(f"\nS1C {'PASS' if ok else 'FAIL'}: energy rel {rel:.3e}, "
-          f"worst live-out {worst[0][0]:.3e} ({worst[0][1]})" if worst else "")
+    detail = (f", worst live-out {worst[0][0]:.3e} ({worst[0][1]})" if worst else "")
+    print(f"\nS1C {'PASS' if ok else 'FAIL'}: energy rel {rel:.3e}{detail}")
     summary = costs.summary()
     print("cost ledger: " + "  ".join(f"{k}={v:.1f}s" for k, v in summary["totals_s"].items()),
           flush=True)

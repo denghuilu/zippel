@@ -1163,10 +1163,13 @@ Two things follow, and the first is a correction to where effort went.
 it superlinear, and D30 made it an S3 entry criterion; D31 then made it linear. That work was
 correct but aimed at the smaller cost. **[profile]**
 
-**Compile time is quadratic in group width** — `compile_s = 1.63e-5 · terms^1.97`, R² 0.903,
-against schedule's `terms^0.97`. That is a constraint on the *fusion pass*, and it opposes D23:
+**Compile time is strongly superlinear in group width** — `compile_s = 3.00e-5 · terms^1.87`,
+R² 0.942, against schedule's `terms^0.97`. (An earlier fit over 12 points gave `terms^1.97`,
+R² 0.903, and extrapolated the widest group at 109 minutes; measured, it is **51.4 min** —
+overpredicted 2.1×, D37. The exponent and the decisions it drove both survive; the error bar I
+failed to attach to a 4.5×-out extrapolation does not.) That is a constraint on the *fusion pass*, and it opposes D23:
 fusing `cat_83 + rotin_84` elides a `[E,9,256]` intermediate — 2.28 GiB at si_medium, precisely
-the store D23 exists to remove — and costs an extrapolated **109 minutes** of compile to do it,
+the store D23 exists to remove — and costs a **measured 51.4 minutes** of compile to do it,
 against ~2 minutes for the split pair. Fusion width is not free, and S2's grouping search must
 weigh bytes saved against compile cost rather than maximise fusion (D35).
 
