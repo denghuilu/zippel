@@ -228,3 +228,49 @@ One dated line per deviation from the M1 work order: what changed, why.
   derivative a plain sum of contraction paths over buffers that already exist, and removes an
   input from the transform's signature.
 
+
+## 2026-08-07 — D22: Phase 2 emits SIMT small-tile kernels, not WGMMA. My plan's premise was wrong.
+
+PLAN.md justified a WGMMA design by claiming lmax=2 is "the most favourable point" on FlashSO2's
+measured curve, because the block-diagonal is densest there: "35 nonzeros of 81 = 43%, vs
+969/9216 = 10.5% at lmax 8". That comparison is unpadded for lmax 2 (81 = 9^2) and padded for
+lmax 8 (9216 = 96^2). A dense WGMMA tile costs nnz/nc_pad^2, and under consistent accounting:
+
+  lmax   nc  nnz   nnz/nc^2   nc_pad(32)  nnz/pad^2   nc_pad(16)  nnz/pad^2
+     2    9   35      43.2%           32       3.4%           16      13.7%
+     4   25  165      26.4%           32      16.1%           32      16.1%
+     8   81  969      14.8%           96      10.5%           96      10.5%
+
+lmax=2 is the *worst* point, not the best: nc=9 cannot fill any WGMMA N/K granularity. The
+configuration FlashSO2 measured at 0.55x of production Triton is lmax=4 at 16.1%; we would be
+building at 3.4-13.7%. Their diagnosis -- "the dense N x K WGMMA tile pays quadratically for the
+block-diagonal zeros" -- applies to us harder than to them.
+
+Decision: Phase 2 emits **SIMT small-tile kernels** -- per-degree register tiles over the segment
+axis, the design their production Triton uses and their nine-experiment campaign could not beat by
+changing the engine. WGMMA is not attempted. This is a design decision taken on someone else's
+measured evidence rather than by re-deriving it at a cost of days, and it is recorded as such.
+
+## 2026-08-07 — D23: Phase 2's target is the materialization contract, not kernel micro-efficiency.
+
+FlashSO2's postmortem closes with the one lever their campaign left open:
+
+  "The only lever with >10% of headroom left is the contract: the dense [E, nc, 2C] bf16 store is
+   838 MB (58% of all DRAM traffic at lmax 4). ... Chasing the remaining in-kernel percents is not
+   worth further effort; changing what Stage 1 emits is."
+
+and, from the INT8 follow-up:
+
+  "Any real win must reduce instructions or stores (e.g. fusing consumers of pre_conv so the dense
+   store is never made), not input bytes."
+
+That is this program's bet, reached independently by a different project on the same hardware and
+the same block. It is corroboration of the hypothesis, not evidence for the conclusion -- they
+identified the lever; whether joint three-pass compilation actually pulls it is exactly what M1
+measures.
+
+Consequence for Phase 2: the deliverable is the **fusion partition**, not a faster rotation. Gate
+1 measured 42 / 46 / 107 fusion groups against 101 / 290 / 903 ops for fwd / force / dbwd, and
+peak-live of 6.03 / 20.73 / 57.32 GiB under a naive unscheduled order. Those stores are the
+target. A Phase 2 that produces a 1.05x rotation and materializes the same intermediates has
+missed the bet even if every kernel is fast.
