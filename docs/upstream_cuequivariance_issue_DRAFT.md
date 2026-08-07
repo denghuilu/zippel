@@ -9,73 +9,85 @@
 
 ### Summary
 
-For a `SegmentedPolynomial` whose `SegmentedTensorProduct` has **more than one path**,
-`method="indexed_linear"` returns a different result from `method="fused_tp"` and
+When two or more paths of a `SegmentedTensorProduct` accumulate into the **same output
+segment**, `method="indexed_linear"` returns a different result from `method="fused_tp"` and
 `method="naive"` on identical inputs. `fused_tp` and `naive` agree with each other and with a
 hand-written transcription of the descriptor semantics; `indexed_linear` does not. No error or
 warning is raised, so a user who selects `indexed_linear` for its (much better) memory behaviour
 silently gets wrong numbers.
 
-Relative errors up to **0.83** in FP64.
+Relative errors up to **1.31** in FP64. Path count, weight reuse, negative coefficients and heterogeneous segment sizes are each individually fine — the shared output segment is the trigger.
 
 ### Reproducer
+
+Self-contained; no `escn_tp_compact` and no experimental entry point. The two descriptors below
+are identical except for whether the two paths write to the **same** output segment.
 
 ```python
 import torch
 import cuequivariance as cue
 import cuequivariance_torch as cuet
-from cuequivariance.group_theory.experimental.escn import escn_tp_compact
 
 DT, DEV = torch.float64, "cuda"
+U, V = 4, 3
 
-def segment_slices(operand):
-    out, off = [], 0
-    for seg in operand.segments:
-        size = 1
-        for d in seg:
-            size *= d
-        out.append((off, off + size, tuple(seg)))
-        off += size
-    return out
 
-def hand_oracle(poly, weights, x):
-    """Literal transcription of `uv,u,v`: out[o][v] += c * sum_u w[wseg][u,v] * x[i][u]."""
-    (op, stp), = poly.operations
-    w_segs, in_segs, out_segs = (segment_slices(o) for o in stp.operands)
-    out = torch.zeros(x.shape[0], out_segs[-1][1], device=x.device, dtype=x.dtype)
-    for path in stp.paths:
-        wi, xi, oi = (int(k) for k in path.indices)
-        c = float(path.coefficients)
-        ws, we, (u, v) = w_segs[wi]
-        xs, xe, _ = in_segs[xi]
-        os_, oe, _ = out_segs[oi]
-        blk = weights[:, ws:we].reshape(-1, u, v).expand(x.shape[0], u, v)
-        out[:, os_:oe] += c * torch.einsum("buv,bu->bv", blk, x[:, xs:xe])
-    return out
+def make(shared_out: bool):
+    """Two paths, unique weights, +1 coefficients. Only the output segments differ."""
+    d = cue.SegmentedTensorProduct.from_subscripts("uv,u,v")
+    d.add_segment(1, (U,)); d.add_segment(1, (U,))          # two input segments
+    for _ in range(1 if shared_out else 2):
+        d.add_segment(2, (V,))                              # one shared, or one each
+    d.add_segment(0, (U, V)); d.add_segment(0, (U, V))      # a distinct weight per path
+    d.add_path(0, 0, 0, c=1.0)
+    d.add_path(1, 1, 0 if shared_out else 1, c=1.0)
+    return cue.SegmentedPolynomial.eval_last_operand(d)
 
-# minimal failing case: one l=1 irrep, m_max=1 -> 5 paths, 12 weights, 6 inputs
-poly = escn_tp_compact(cue.Irreps("SO3", "2x1"), cue.Irreps("SO3", "2x1"), m_max=1)
+
+def oracle(w, x, shared_out):
+    """out[oseg] += w[path] @ x[iseg], straight from the descriptor's own semantics."""
+    n = x.shape[0]
+    res = torch.zeros(n, V if shared_out else 2 * V, device=DEV, dtype=DT)
+    for p in range(2):
+        blk = w[:, p * U * V:(p + 1) * U * V].reshape(-1, U, V).expand(n, U, V)
+        o = 0 if shared_out else p * V
+        res[:, o:o + V] += torch.einsum("buv,bu->bv", blk, x[:, p * U:(p + 1) * U])
+    return res
+
 
 torch.manual_seed(0)
-w = torch.randn(1, poly.inputs[0].size, device=DEV, dtype=DT)
-x = torch.randn(8, poly.inputs[1].size, device=DEV, dtype=DT)
+w = torch.randn(1, 2 * U * V, device=DEV, dtype=DT)
+x = torch.randn(8, 2 * U, device=DEV, dtype=DT)
 idx = torch.zeros(8, dtype=torch.long, device=DEV)
-oracle = hand_oracle(poly, w, x)
 
-for method in ("fused_tp", "indexed_linear", "naive"):
-    mod = cuet.SegmentedPolynomial(poly, method=method, math_dtype=DT).cuda()
-    got = mod([w, x], input_indices={0: idx})[0]
-    rel = ((got - oracle).abs().max() / oracle.abs().max()).item()
-    print(f"{method:16s} rel err vs descriptor semantics = {rel:.3e}")
+for shared_out in (True, False):
+    poly = make(shared_out)
+    ref = oracle(w, x, shared_out)
+    label = "SHARED output segment" if shared_out else "distinct output segments"
+    print(f"\n2 paths, unique weights, +1 coefficients, {label}:")
+    for method in ("fused_tp", "indexed_linear", "naive"):
+        mod = cuet.SegmentedPolynomial(poly, method=method, math_dtype=DT).cuda()
+        got = mod([w, x], input_indices={0: idx})[0]
+        rel = ((got - ref).abs().max() / ref.abs().max()).item()
+        print(f"  {method:16s} rel err = {rel:.3e}")
 ```
 
 Output on our machine:
 
 ```
-fused_tp         rel err vs descriptor semantics = 0.000e+00
-indexed_linear   rel err vs descriptor semantics = 8.298e-01
-naive            rel err vs descriptor semantics = 1.173e-16
+2 paths, unique weights, +1 coefficients, SHARED output segment:
+  fused_tp         rel err = 0.000e+00
+  indexed_linear   rel err = 7.690e-01
+  naive            rel err = 0.000e+00
+
+2 paths, unique weights, +1 coefficients, distinct output segments:
+  fused_tp         rel err = 0.000e+00
+  indexed_linear   rel err = 1.144e-16
+  naive            rel err = 0.000e+00
 ```
+
+Flipping one flag — which output segment the second path writes to — moves `indexed_linear` from
+machine precision to 77 % relative error, with `fused_tp` and `naive` exact in both.
 
 ### Scope — the trigger is a shared output segment, nothing else
 
@@ -105,22 +117,6 @@ give, which is consistent with the paths not being **accumulated** — written r
 or only one executed per output. We have not read the kernel source, so that is the shape of the
 symptom rather than a diagnosis.
 
-### Secondary observation
-
-The three backends disagree on what `math_dtype` means when it conflicts with the operand dtype.
-With FP64 operands on a descriptor `indexed_linear` handles correctly:
-
-| method | `math_dtype=float32` with FP64 operands |
-|---|---|
-| `fused_tp` | raises `ValueError: Fused TP does not support float32 math_dtype with float64 inputs` |
-| `naive` | honours it — result accurate to 1.65e-07 |
-| `indexed_linear` | warns that `math_dtype` is ignored, then computes in FP64 (rel err 0.00e+00) |
-
-So `indexed_linear` cannot be asked for reduced-precision math: the request is accepted, warned
-about and dropped, and a user tuning for speed silently gets FP64. Whichever behaviour is
-intended, three different ones for a single argument seems worth reconciling. This is
-independent of the correctness bug above.
-
 ### Why it matters
 
 `escn_tp_compact` descends from eSCN, where the radial network emits a *per-edge* weight matrix,
@@ -145,13 +141,17 @@ Happy to file that separately if useful.)
 
 ## TODO before this is sendable
 
-1. ~~Narrow the trigger~~ — **done**; it is a shared output segment, and the report above is
-   now written against hand-built descriptors rather than `escn_tp_compact`, so item 4 below
-   matters much less.
-2. Re-check against the latest cuequivariance release, and on x86 as well as aarch64, to rule out
+1. ~~Narrow the trigger~~ — **done.** It is a shared output segment; path count, weight reuse,
+   negative coefficients and heterogeneous segment sizes are each individually fine.
+2. ~~Reframe around the public API~~ — **done.** The reproducer builds a
+   `SegmentedTensorProduct` from `from_subscripts` / `add_segment` / `add_path` only, so the
+   report no longer depends on `escn_tp_compact` being a supported entry point.
+   `escn_tp_compact` now appears solely as motivation under "Why it matters".
+3. Re-check against the latest cuequivariance release, and on x86 as well as aarch64, to rule out
    a platform-specific build issue.
-3. Search existing issues for duplicates.
-4. Confirm `escn_tp_compact` is a supported entry point — it lives under
-   `group_theory.experimental`, is not exported from `cue.descriptors`, and its own tests only
-   construct descriptors without executing them. If it is unsupported, reframe the report around a
-   descriptor built from public API instead, so it cannot be dismissed on that basis.
+4. Search existing issues for duplicates.
+
+A `math_dtype` observation was drafted here and has been **withdrawn**: a controlled experiment
+refuted the reading it rested on (`findings/cueq-math-dtype.md`). It is not part of this report.
+
+**Status: awaiting Denghui's review. No further edits.**
