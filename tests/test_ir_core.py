@@ -341,3 +341,34 @@ def test_peak_live_bytes_is_monotone_in_graph_size():
     big = tiny_graph(n=60, e=110)
     prog, _ = build_chain(small)
     assert peak_live_bytes(prog, chain_sizes(big)) > peak_live_bytes(prog, chain_sizes(small))
+
+
+def test_repeated_operand_with_differing_slices_is_checked_per_position():
+    """A path naming one operand twice must be extent-checked at *each* position.
+
+    `_check_contraction` resolved an operand's slice with `p.operands.index(j)`, which finds
+    only the first position that operand appears at. For `x[0:3] * x[3:8]` -- operands (0, 0)
+    with different slices -- both groups were then checked against the extent of the first
+    slice, so a spec demanding equal extents passed against unequal ones. The type checker's
+    guarantee ("an ill-typed program cannot be built", docs/ir.md) had a hole exactly where the
+    D21 product-rule bug lived, and Phase 2's emitter relies on that guarantee.
+
+    Latent when found: all four repeated-operand paths in fwd/force/dbwd use identical slices
+    at both positions, so no computed value was ever wrong.
+    """
+    prog = Program()
+    x = prog.add_input("x", BufferType("edge", (("a", 8),)))
+
+    # "a,a->a" demands both operands have the same extent; 3 != 5, so this must be rejected.
+    with pytest.raises(ValueError, match="inconsistent extents"):
+        prog.contract(
+            [x], BufferType("edge", (("a", 3),)),
+            [ContractionPath(1.0, "a,a->a", (0, 0),
+                             ((slice(0, 3),), (slice(3, 8),)), (slice(0, 3),))])
+
+    # The legal form -- two equal-extent slices of the same buffer -- still builds.
+    y = prog.contract(
+        [x], BufferType("edge", (("a", 3),)),
+        [ContractionPath(1.0, "a,a->a", (0, 0),
+                         ((slice(0, 3),), (slice(5, 8),)), (slice(0, 3),))])
+    assert prog.type_of(y).sizes == (3,)

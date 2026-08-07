@@ -341,9 +341,13 @@ def _check_contraction(prog, inputs, index_maps, out_index_map, out_type, paths)
                 f"has rank {len(want)} ({out_type})"
             )
         extent: dict[str, int] = {}
-        for j, spec in zip(p.operands, specs):
+        # Iterate by *position*, not by operand id: a path may name one operand more than once
+        # with different slices (`x[0:3] * x[5:8]` is operands (0, 0)). `operands.index(j)`
+        # would resolve both positions to the first one's slice and check the second group's
+        # spec against the wrong extents. Same bug class as D21, in the type checker.
+        for pos, (j, spec) in enumerate(zip(p.operands, specs)):
             t = prog.type_of(inputs[j])
-            sizes = sliced_sizes(t, p.slices_for(p.operands.index(j)))
+            sizes = sliced_sizes(t, p.slices_for(pos))
             if len(spec) != len(sizes):
                 raise ValueError(
                     f"operand {j} spec {spec!r} has rank {len(spec)} but its sliced shape is "
