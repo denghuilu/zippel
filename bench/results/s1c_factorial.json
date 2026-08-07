@@ -1,0 +1,98 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "group": 43,
+  "staged": [
+    "c1_w2a"
+  ],
+  "smem_kib": 128.5,
+  "smem_cap_kib": 224.0,
+  "plan": {
+    "c1_w1a": {
+      "axis": 1,
+      "rank": 4,
+      "perm": [
+        0,
+        2,
+        3,
+        1
+      ],
+      "kib": 512.5
+    },
+    "c1_w1b": {
+      "axis": 1,
+      "rank": 4,
+      "perm": [
+        0,
+        2,
+        3,
+        1
+      ],
+      "kib": 512.5
+    },
+    "c1_w2a": {
+      "axis": 1,
+      "rank": 4,
+      "perm": [
+        0,
+        2,
+        3,
+        1
+      ],
+      "kib": 128.5
+    },
+    "c1_w2b": {
+      "axis": 1,
+      "rank": 4,
+      "perm": [
+        0,
+        2,
+        3,
+        1
+      ],
+      "kib": 128.5
+    }
+  },
+  "arms": {
+    "baseline": {
+      "status": "ok",
+      "ms": 714.8190307617188,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal_to_baseline": true,
+      "max_diff_vs_baseline": 0.0,
+      "spread_pct": 0.025820565004168943
+    },
+    "A_transpose": {
+      "status": "ok",
+      "ms": 582.0228881835938,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal_to_baseline": true,
+      "max_diff_vs_baseline": 0.0,
+      "spread_pct": 0.03315903342990561
+    },
+    "A_matched": {
+      "status": "ok",
+      "ms": 709.0562744140625,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal_to_baseline": true,
+      "max_diff_vs_baseline": 0.0,
+      "spread_pct": 0.039389944786935346
+    },
+    "B_smem": {
+      "status": "ok",
+      "ms": 1852.102783203125,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal_to_baseline": true,
+      "max_diff_vs_baseline": 0.0,
+      "spread_pct": 0.05725518120833148
+    },
+    "AB_both": {
+      "status": "failed",
+      "error": "CUDA error: an illegal memory access was encountered\nSearch for `cudaErrorIllegalAddress' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be inco"
+    }
+  }
+}

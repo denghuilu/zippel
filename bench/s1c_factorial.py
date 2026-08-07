@@ -142,6 +142,9 @@ def main():
     ap.add_argument("--dtype", default="f32", choices=["f32", "f64"])
     ap.add_argument("--warmup", type=int, default=5)
     ap.add_argument("--iters", type=int, default=30)
+    ap.add_argument("--arms", default="",
+                    help="comma-separated subset to run; baseline is always included because it "
+                         "is the bit-equality reference every other arm is checked against")
     ap.add_argument("--out", default="bench/results/s1c_factorial.json")
     args = ap.parse_args()
 
@@ -222,6 +225,12 @@ def main():
             "A_matched": (matched, ()),
             "B_smem": ({}, stage),
             "AB_both": (transpose, stage)}
+    if args.arms:
+        want = {"baseline"} | {a.strip() for a in args.arms.split(",") if a.strip()}
+        unknown = want - set(arms)
+        if unknown:
+            raise SystemExit(f"unknown arms: {sorted(unknown)}; have {sorted(arms)}")
+        arms = {k: v for k, v in arms.items() if k in want}
 
     from zippel.interp import run
     import time
@@ -262,11 +271,19 @@ def main():
             results[name] = {"status": "not_emitted", "error": str(exc)[:300]}
             continue
 
+        # The permutation to apply is read back from the generated module, never recomputed from
+        # the request. The emitter drops staged operands from the transpose map -- staging
+        # subsumes it -- so `tr` and what the kernel was actually emitted against differ for any
+        # arm doing both. Recomputing here handed AB_both a permuted tensor for an operand the
+        # kernel indexed unpermuted, whose extents no longer bound the emitted coordinates: an
+        # illegal memory access rather than a wrong answer.
+        module = sys.modules[f"zippel_generated.fact_{name}_{args.dtype}"]
+        eff = getattr(module, "TRANSPOSE", {})
         tensors = {}
         for b in order:
             v = (ref[b] if b in ref else torch.zeros(1, dtype=torch.float64)).to("cuda", dt)
-            if b in tr:
-                v = v.permute((0,) + tuple(k + 1 for k in tr[b]))
+            if b in eff:
+                v = v.permute((0,) + tuple(k + 1 for k in eff[b]))
             tensors[b] = v.contiguous()
         for b in spec.live_out:
             tensors[b] = torch.zeros_like(ref[b].to("cuda", dt))

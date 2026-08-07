@@ -1168,3 +1168,46 @@ A result near that confirms the decomposition and means the arms measure separab
 A large departure means the levers interact — most plausibly through occupancy, since transposing
 does not change smem use and so should not change the one-block-per-SM ceiling. Written now so the
 number lands into a frame rather than the reverse.
+
+## 2026-08-08 — D52: AB_both crashed. One decision was being made in two places.
+
+`AB_both` failed with `cudaErrorIllegalAddress`. The cause is mine and it is structural, not a
+typo.
+
+D48 gave the emitter a rule: **staging subsumes transposition**, so a buffer requested in both is
+emitted staged and *not* permuted. The emitter applied that rule internally:
+
+    transpose = {b: p for b, p in (transpose or {}).items() if b not in staged}
+
+The bench, meanwhile, permuted the tensors it handed in from **its own copy of the request**, not
+from what the emitter decided. For the four arms where the two sets agreed, nothing showed. For
+`AB_both` — the only arm asking for both levers on the same operand — the kernel indexed
+`c1_w2a` unpermuted while the harness handed in a permuted tensor whose extents no longer bound
+the emitted coordinates. Not a wrong answer: an out-of-range address.
+
+**The bug class.** This is not "keyed by identity" (D21, `findings/keyed-by-identity.md`) and not
+"a fix that lives in one call site is a patch" (D40), but their sibling: **one decision computed
+independently in two places**. The emitter's own docstring already warned that the permutation is
+"applied identically to the emitted index order and to the tensor handed in at launch" — and then
+I added a filter to one side of that identity without exposing it to the other. The comment
+described an invariant the code no longer maintained.
+
+**Fix, at the level of the invariant rather than the call site.** The generated module now carries
+
+    TRANSPOSE = {...}      # the permutation each operand MUST be handed in under
+    STAGED = [...]         # operands served from smem instead
+
+and the harness reads them back rather than recomputing. There is now exactly one place the
+decision is made and one place it is published; a caller cannot disagree with the kernel without
+disagreeing with a constant the kernel ships. Same pattern as `SEGMENT` and `EMITTER_SHA`, and for
+the same reason.
+
+**Why it presented as a crash and not a silent wrong number, which is luck worth noting.** The
+permuted extents happened to be smaller on the axis the kernel indexed with `o < 128`, so the
+access ran off the tensor. Had the permutation been between two axes of equal extent, bit-equality
+against baseline would have caught it — but it would have been caught as "arm is wrong", with the
+cause still to find. The crash was the cheaper failure.
+
+The four measured arms are unaffected: their `TRANSPOSE` and their request coincide, and all four
+are bit-equal to baseline. `AB_both` re-runs alone, with `baseline` alongside it as the
+bit-equality reference and as a reproducibility check on the metadata change.

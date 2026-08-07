@@ -314,6 +314,16 @@ TENSOR_ORDER = {tensors!r}
 SEGMENT = "{spec.segment}"
 TEMPLATE = "T2"
 EMITTER_SHA = "{_esha}"
+
+#: The permutation each operand's tensor MUST be handed in under, and the operands served from
+#: shared memory instead. **The caller must read these back rather than recompute them.** They are
+#: the emitter's decision, not the caller's request: staging subsumes transposition, so a buffer
+#: asked for in both is emitted staged and *not* permuted. A caller that permuted its own copy of
+#: the request would hand in a tensor whose axes disagree with the emitted index order -- which is
+#: an illegal memory access, not a wrong answer, because the permuted extents no longer bound the
+#: emitted coordinates. That is how this constant came to exist.
+TRANSPOSE = {transpose!r}
+STAGED = {list(staged)!r}
 REDUCTION_DEPTH = {depth}
 EXACT = False
 
