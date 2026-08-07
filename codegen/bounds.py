@@ -130,6 +130,32 @@ def max_factors(sched) -> int:
     return max((len(t.factors) for a in sched.assigns for t in a.terms), default=1)
 
 
+def scalar_map_count(sched) -> int:
+    """Scalar-map evaluations in the schedule.
+
+    Each is worth at least an ulp of its own result: `rsqrt` in the emitted kernel and `rsqrt` in
+    torch need not agree to the last bit, and that difference is *not* a reordering of a sum, so
+    the ordering term does not cover it.
+    """
+    return sum(1 for a in sched.assigns if a.fn is not None)
+
+
+def output_magnitude(sched, env: dict[str, torch.Tensor]) -> float:
+    """Largest magnitude among the group's live-outs.
+
+    The term-sum magnitude is the wrong scale for a group whose result is a scalar map: only
+    assignments *with terms* contribute to it, so `invstd = rsqrt(var + eps)` had its bound
+    computed from the magnitude of the variance while the error was measured on its inverse
+    square root. When `var` is small that inverts to something much larger, and the bound was
+    correspondingly too small -- g11 exceeded it by 1.008x while its twin g7 passed.
+    """
+    worst = 0.0
+    for buf in sched.spec.live_out:
+        if buf in env:
+            worst = max(worst, float(env[buf].abs().max()))
+    return worst
+
+
 def term_magnitudes(sched, env: dict[str, torch.Tensor],
                     gathers: dict[str, str] | None = None) -> list[tuple[float, int, int]]:
     """`(magnitude, assign index, term index)` for every term, largest first.
@@ -162,17 +188,40 @@ def term_magnitudes(sched, env: dict[str, torch.Tensor],
     return out
 
 
+def _scatter_fan_in(env: dict[str, torch.Tensor], scatter: str) -> int:
+    """Largest number of segment elements accumulating into one output element."""
+    idx = env[scatter].long().reshape(-1)
+    return int(torch.bincount(idx).max()) if idx.numel() else 1
+
+
 def ordering_bound(sched, env: dict[str, torch.Tensor],
-                   gathers: dict[str, str] | None = None) -> float:
+                   gathers: dict[str, str] | None = None,
+                   scatter: str | None = None) -> float:
     """The largest difference re-associating this schedule's arithmetic can produce.
 
     `2 * (depth - 1 + factors) * eps * max SUM|terms|`. The `factors` term is not decoration: a
     depth-1 assignment has nothing to *sum* but still multiplies, and `coeff * (a * b)` may round
     differently from `(coeff * a) * b` or contract into an FMA. Without it the bound was exactly
     0.0 for single-term assignments and fired on a correct kernel differing by 1.11e-16.
+
+    **`scatter` widens the bound by the fan-in, and must be passed for any scattering kernel.**
+    A per-thread bound is the wrong bound for a scatter-add: the output element is a sum over
+    every segment element that maps to it -- 216 nodes into one scalar for `E_105`, ~45 edges per
+    node for `scatter_100` -- and CUDA atomics complete in nondeterministic order, so that outer
+    sum is reordered too, differently on every run. Omitting this made both scatter kernels
+    "fail" at 1.11e-15 and 3.55e-15 against ~1.2e-16 bounds: near machine precision, which is the
+    signature of a bound that is too tight rather than a kernel that is wrong.
     """
     depth = reduction_depth(sched)
-    return 2.0 * (depth - 1 + max_factors(sched)) * EPS * magnitude_sum(sched, env, gathers)
+    fan_in = _scatter_fan_in(env, scatter) if scatter is not None else 1
+    # the outer accumulation contributes fan_in-1 further additions, each over a magnitude of at
+    # most the per-thread total, so both the depth and the magnitude scale by the fan-in
+    total_depth = depth * fan_in
+    # The scale is whichever is larger: the terms being summed, or the values actually produced.
+    # A scalar map can make the output far larger than any term feeding it.
+    magnitude = max(magnitude_sum(sched, env, gathers), output_magnitude(sched, env)) * fan_in
+    ops = total_depth - 1 + max_factors(sched) + scalar_map_count(sched)
+    return 2.0 * ops * EPS * magnitude
 
 
 def assert_within_bound(name: str, got: torch.Tensor, want: torch.Tensor,
@@ -196,5 +245,6 @@ def assert_within_bound(name: str, got: torch.Tensor, want: torch.Tensor,
     return err
 
 
-__all__ = ["EPS", "reduction_depth", "max_factors", "magnitude_sum", "ordering_bound",
-           "term_magnitudes", "assert_within_bound"]
+__all__ = ["EPS", "reduction_depth", "max_factors", "scalar_map_count",
+           "output_magnitude", "magnitude_sum", "ordering_bound", "term_magnitudes",
+           "assert_within_bound"]

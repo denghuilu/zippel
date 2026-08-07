@@ -18,3 +18,4 @@ codegen/_generated/
 # swept 8.7 GB of them into a commit and the remote rejected the 5.5 GiB pack.
 core_*
 core.*
+logs/
