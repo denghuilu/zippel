@@ -1,0 +1,42 @@
+{
+  "fixture": "si_small",
+  "dtype": "f64",
+  "sizes": {
+    "node": 216,
+    "edge": 9576,
+    "graph": 1
+  },
+  "host": "daint-ln001",
+  "slurm_job": null,
+  "git_sha": "adf3581",
+  "provenance": "local-login-node",
+  "max_volume": 10000,
+  "warmup": 20,
+  "iters": 100,
+  "launches_fused": 55,
+  "launches_eager": 225,
+  "launch_count_note": "fused = kernels emitted by the compiler; eager = CUDA kernels the profiler observed. Different methods; comparable in order of magnitude, not to the unit.",
+  "templates": {
+    "T1": 22,
+    "T2": 24,
+    "T3": 9
+  },
+  "fused": {
+    "median_ms": 117.84780883789062,
+    "min_ms": 117.55830383300781,
+    "max_ms": 118.64214324951172,
+    "iqr_ms": 0.1767425537109375,
+    "iters": 100
+  },
+  "eager": {
+    "median_ms": 5.951295852661133,
+    "min_ms": 5.8746562004089355,
+    "max_ms": 6.088031768798828,
+    "iqr_ms": 0.060991764068603516,
+    "iters": 100
+  },
+  "peak_mib_fused": 1582.16748046875,
+  "peak_mib_eager": 2216.7958984375,
+  "speedup": 0.050499843071733566,
+  "peak_ratio": 1.4011132991942978
+}

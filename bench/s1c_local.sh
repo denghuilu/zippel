@@ -18,6 +18,21 @@ set -uo pipefail
 cd "${ZIPPEL_ROOT:-/iopsstor/scratch/cscs/dlu/iclr/zippel}"
 source env.sh
 
+# EXCLUSIVE LOCK ON THE RESULTS DIRECTORY. Without it a second runner -- on another host, in
+# another session, started before a `cd` that moved us to a compute node -- writes the same
+# filenames on the same shared filesystem and the two interleave. That is not hypothetical: it
+# happened at Gate 0 (job 4376123 overwritten by a login-node run, REPORT 8.7) and it happened
+# again here, with a login-node sweep and a compute-node sweep both writing
+# bench/results/s1c_local_rep*.json. `bench/run_all.sh` grew this lock after the first time; this
+# script did not inherit it, which is the whole lesson.
+exec 9> bench/results/.s1c_local.lock
+if ! flock -n 9; then
+    echo "REFUSING: another s1c_local run holds the results lock." >&2
+    echo "  held by: $(cat bench/results/.s1c_local.owner 2>/dev/null || echo unknown)" >&2
+    exit 1
+fi
+echo "$(hostname) pid=$$ $(date -Is)" > bench/results/.s1c_local.owner
+
 REPS="${REPS:-5}"
 MAXVOL=10000                       # term-minimal split, identical everywhere (D36)
 mkdir -p logs bench/results
@@ -25,7 +40,9 @@ mkdir -p logs bench/results
 run_config() {
     local gpu="$1" fix="$2" dt="$3"
     for r in $(seq 1 "$REPS"); do
-        local out="bench/results/s1c_local_rep${r}_${fix}_${dt}.json"
+        # hostname in the filename: even under the lock, results from different hosts must not
+        # be able to occupy the same path -- a lock prevents concurrency, not confusion
+        local out="bench/results/s1c_local_$(hostname)_rep${r}_${fix}_${dt}.json"
         CUDA_VISIBLE_DEVICES="$gpu" OMP_NUM_THREADS=8 \
         numactl --cpunodebind=0 --membind=0 \
             python -u bench/s1c_bench.py --fixture "$fix" --dtype "$dt" \

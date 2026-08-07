@@ -765,3 +765,37 @@ Consequences either way:
   separately at any fixture size; they belong fused into a neighbour or run on a single block.
 * None of this touches the memory axis, which is already 1.39x favourable on the pass with the
   least to gain.
+
+## 2026-08-07 — D40: the Gate 0 contamination repeated, in a script that never inherited the fix.
+
+Gate 0 lost a measurement to two runners writing the same result files: an exclusive-node sbatch
+job and a login-node run I had started in parallel (REPORT §8.7). The fix was provenance fields
+plus an exclusive `flock` in `bench/run_all.sh`, and it was recorded as fixed "at the cause".
+
+It was not fixed at the cause. It was fixed in **one script**.
+
+`bench/s1c_local.sh`, written today, has no lock. A sweep launched while the session was on
+`daint-ln001` survived a teardown; the session later moved into a compute-node allocation
+(`nid005562`); I relaunched there; and both wrote `bench/results/s1c_local_rep*_*.json` on the
+same shared filesystem. Three files had already landed carrying `host=daint-ln001`, written
+minutes earlier, while the "current" sweep was on a different machine entirely.
+
+Caught by the provenance field — the *other* half of the Gate 0 fix, which did generalise
+because it lives in the result rather than in a script. Without `host` in the JSON the numbers
+would have looked ordinary.
+
+Actions taken:
+
+* the three login-node results are quarantined under `bench/results/quarantine/`, not deleted —
+  they are real measurements of a contended host and might be worth something later, but they
+  are not what the sweep was measuring;
+* the login-node processes were killed over `ssh` (they were unreachable from the allocation, so
+  "kill the stray job" needed the other host);
+* `s1c_local.sh` gains the `flock` that `run_all.sh` has, and result filenames now carry the
+  hostname. A lock prevents concurrency; a host-qualified path prevents *confusion*, and the two
+  failures here were one of each.
+
+**The lesson is about the shape of the original fix, not about locking.** "Fixed at the cause"
+meant adding a lock to the script that failed. Every later script started without one, and the
+guard did not exist anywhere it could be inherited from. A fix that lives in one call site is a
+patch; the provenance field survived because it was attached to the artifact instead.

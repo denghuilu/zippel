@@ -19,3 +19,5 @@ codegen/_generated/
 core_*
 core.*
 logs/
+bench/results/.s1c_local.lock
+bench/results/.s1c_local.owner

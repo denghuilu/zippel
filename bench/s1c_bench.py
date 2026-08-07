@@ -138,8 +138,14 @@ def main():
         "host": socket.gethostname(), "slurm_job": None, "git_sha": sha,
         # local-login-node runs cannot see between-node/placement variance and are DEVELOPMENT
         # numbers, not verdict-table numbers; recorded so the two can never be confused later
-        "provenance": ("sbatch-exclusive" if __import__("os").environ.get("SLURM_JOB_ID")
-                       else "local-login-node"),
+        # Provenance is derived, never assumed. An interactive `salloc` on a compute node is
+        # NOT a login node and NOT the pinned protocol either: it has no contention but also no
+        # between-node variance, because it is one node. Three states, distinguished:
+        "provenance": (
+            "sbatch-array" if __import__("os").environ.get("SLURM_ARRAY_TASK_ID")
+            else "salloc-compute-node" if __import__("os").environ.get("SLURM_JOB_ID")
+            else "login-node-contended"),
+        "slurm_nodelist": __import__("os").environ.get("SLURM_NODELIST"),
         # provenance: five allocations that silently disagreed about the partition would produce
         # a spread that looks like hardware variance and is not
         "max_volume": args.max_volume,
