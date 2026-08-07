@@ -1,80 +1,81 @@
-# `CUTE_DSL_CACHE_DIR` does nothing, and the real cache follows `TMPDIR`
+# REFUTED — `CUTE_DSL_CACHE_DIR` is real; `cute.compile()` disables the cache by design
 
-**Status: stands.** Diagnosed inside a one-hour timebox (R8's first materialization). Two
-separate problems, one mine and one upstream's.
+> **Status: REFUTED.** Both of this entry's central claims were wrong, and the upstream note it
+> produced has been withdrawn unfiled. Kept because it reached a report — twice — and because the
+> way it was wrong is more instructive than the conclusion.
 
-## The symptom
+## What I claimed
 
-Compiling the composed forward — 55 kernels — took ~9 minutes, every time, across three
-consecutive runs. `.jit-cache/cute_dsl` held one 4 KB entry throughout, while
-`CUTE_DSL_CACHE_DIR` was set, exported, and confirmed visible inside the child process.
+1. "`CUTE_DSL_CACHE_DIR` appears **zero times** in nvidia-cutlass-dsl 4.5.2. It has been a no-op
+   since Phase 0."
+2. "The real cache follows `TMPDIR`, and `env.sh` already redirects it, so the cache was working
+   all along for anything that sourced `env.sh`."
 
-## Problem 1, mine: the variable is not read
+Both false. I reported the first to review as a finding and the second as R8's closure.
 
-**`CUTE_DSL_CACHE_DIR` appears zero times in `nvidia-cutlass-dsl` 4.5.2.** Not in the env
-manager, not in the cache helpers, nowhere in the package. It has been a no-op since the day it
-was written into `env.sh` and `PLAN.md`, where it sits alongside `TRITON_CACHE_DIR` and
-`QUACK_CACHE_DIR` — which *are* real — and inherited their credibility by association.
+## What is actually true
 
-The variables the DSL actually reads are `CUTE_DSL`-prefixed and enumerable
-(`base_dsl/env_manager.py`); the one governing the file cache is
-**`CUTE_DSL_DISABLE_FILE_CACHING`**, a boolean defaulting to `False`, i.e. caching is on.
+**`CUTE_DSL_CACHE_DIR` is read.** `base_dsl/env_manager.py` builds its option names by f-string
+interpolation — `f"{prefix}_CACHE_DIR"` with `prefix = "CUTE_DSL"` — so the literal string
+`CUTE_DSL_CACHE_DIR` never appears in the source. **I grepped for the literal.** The variable is
+honoured; my search method could not have found it however hard it looked.
 
-Nobody checked. The pinning block in `env.sh` carries a long comment about why caches must be
-project-local and reproducible from a clean clone, and one of its four exports was decorative.
-
-## Problem 2, upstream's: the cache path is `TMPDIR`, and the dump root is the CWD
-
-`load_cache_from_path` / `dump_cache_to_path` default to `get_default_generated_ir_path()`:
+**The cache never populates because we ask it not to.** `cute.compile()` is
+`CompileCallable.__call__`, and it sets, unconditionally:
 
 ```python
-tmp_dir = Path(os.environ.get("TMPDIR", tempfile.gettempdir()))
+kwargs["compile_only"] = True
+kwargs["no_cache"] = True
 ```
 
-resolving to `$TMPDIR/<user>/cutlass_python_cache`. There is **no dedicated variable** for the
-compile cache — it rides on `TMPDIR`, which every other tool on the system also uses and which
-Alps purges between jobs. A separate helper, `get_default_file_dump_root()`, returns
-`Path.cwd()`, so IR dumps land wherever the process happens to be.
+`dsl.py` then does `if not no_cache and compile_only: no_cache = True` with the warning *"Cache
+is disabled as user wants to compile only."* Every kernel this project builds goes through
+`cute.compile()`, so the file cache is bypassed **by design, at our request**. The library is
+behaving exactly as its own code says it will.
 
-Measured on this machine:
+## The evidence that settled it
 
-| `TMPDIR` | resolved cache path | populated |
-|---|---|---|
-| `env.sh`'s `.jit-cache/tmp` | `.jit-cache/tmp/dlu/cutlass_python_cache` | **yes** — 9 files, 300 KB |
-| default | `/tmp/dlu/cutlass_python_cache` | no |
+A canonical kernel, compiled in two separate processes with `CUTE_DSL_LOG_LEVEL=20`:
 
-So the cache **was working** whenever `env.sh` was sourced. My direct invocations —
-`env CUTE_DSL_CACHE_DIR=... python ...` — bypassed `env.sh`, inherited the system `TMPDIR`, and
-wrote into a location Alps clears. Every "the cache is broken" observation came from a run that
-had carefully set the variable that does nothing while omitting the one that matters.
+```
+run 1: JIT cache miss  module_hash=[2d2c2769…3d33a274]   compile_seconds=0.199
+run 2: JIT cache miss  module_hash=[2d2c2769…3d33a274]   compile_seconds=0.203
+files written to CUTE_DSL_CACHE_DIR: 0
+```
+
+The **module hash is byte-identical across processes**, which rules out the other hypothesis
+outright: our emitted source carries no run-varying fingerprint. And `dump_cache_to_path`'s
+`JIT cache : dumping` line never appears, because the call is gated off before it.
 
 ## What was actually wrong, in order
 
-1. I set a variable that does not exist, for weeks, and it looked authoritative because it sat
-   in a block of variables that do.
-2. I then observed a cold cache and concluded the cache was broken — **[correlation]**: the
-   variable was set, the cache was empty, and I joined them. What I had not done was ask where
-   the cache *would* be if the variable were ignored.
-3. The upstream design makes that easy to get wrong: the cache location is a side effect of a
-   general-purpose variable, and the obvious-looking specific variable does not exist.
+1. **A literal grep against a dynamically-constructed name.** The single check I called
+   "definitive" — one `grep` of the package — was structurally incapable of finding what it
+   looked for. I described it as costing one command and being conclusive; it was one command and
+   conclusive of nothing.
+2. **A second wrong mechanism built on the first.** Having "established" the variable was dead, I
+   found the `TMPDIR` path, saw the cache dir populated, and closed R8. The 9 files I counted
+   there were **pytest temporary fixtures**, not cache entries.
+3. **An upstream note drafted on both.** It has been deleted rather than filed. It would have
+   asked NVIDIA to add a variable that exists and to explain behaviour their code documents.
+
+## The correction that matters
+
+Absence of evidence from a search is only evidence of absence if the search could have found the
+thing. Names built by interpolation, dispatch tables, `getattr`, and generated code are all
+invisible to a literal grep — and "it appears zero times in the package" is exactly the kind of
+statement that sounds like a measurement while being a property of my query.
+
+The right move, available at the time and taken only after two wrong reports, was to turn on the
+library's own logging and let it say what it was doing.
 
 ## Consequences
 
-* `env.sh` keeps `TMPDIR` pointed into the repo — that line was doing all the work and its
-  comment did not know it. `CUTE_DSL_CACHE_DIR` is retained **only** as a documented no-op with
-  a note, because silently deleting it would lose the record of the mistake.
-* Anything invoking the tools directly must source `env.sh` or set `TMPDIR` itself. The N=5
-  sbatch sources `env.sh`, so it caches; its time limit was nonetheless budgeted for cold
-  compiles, which is the safe direction to have guessed wrong.
-* Worth reporting upstream as a usability issue, not a bug: a compile cache that rides on
-  `TMPDIR` with no dedicated override, plus a dump root fixed to the CWD, is easy to misconfigure
-  and gives no diagnostic when it happens. Draft in
-  `docs/upstream_cutedsl_cache_issue_DRAFT.md`; **not filed**, pending review, and much weaker
-  than the other two upstream drafts since nothing here is incorrect — only surprising.
-
-## The general lesson
-
-An environment variable that is set and ignored produces exactly the same observable as one that
-is honoured and unhelpful. Distinguishing them costs one `grep` of the package, and I ran it only
-after building a whole narrative — "the cache is broken", reported twice to review — on top of
-the assumption that setting it meant something.
+* No upstream filing. `docs/upstream_cutedsl_cache_issue_DRAFT.md` deleted.
+* `env.sh`'s comment claiming `CUTE_DSL_CACHE_DIR` is a no-op is corrected — the variable works;
+  we simply never let the cache run.
+* **The compile cost is real and is our design choice**: ~9 minutes per rep, cold, every time,
+  because `cute.compile()` trades the cache for an explicitly compiled callable we can launch
+  repeatedly. Whether that trade is right — the alternative is the `@cute.jit` call path, which
+  caches but re-enters the dispatch layer per launch — is an open question for S2, and now an
+  informed one.

@@ -1,0 +1,43 @@
+{
+  "fixture": "si_small",
+  "dtype": "f32",
+  "sizes": {
+    "node": 216,
+    "edge": 9576,
+    "graph": 1
+  },
+  "host": "nid005562",
+  "slurm_job": "4380517",
+  "git_sha": "66cadb3",
+  "provenance": "salloc-compute-node",
+  "slurm_nodelist": null,
+  "max_volume": 10000,
+  "warmup": 20,
+  "iters": 100,
+  "launches_fused": 55,
+  "launches_eager": 224,
+  "launch_count_note": "fused = kernels emitted by the compiler; eager = CUDA kernels the profiler observed. Different methods; comparable in order of magnitude, not to the unit.",
+  "templates": {
+    "T1": 22,
+    "T2": 24,
+    "T3": 9
+  },
+  "fused": {
+    "median_ms": 52.767967224121094,
+    "min_ms": 52.58467102050781,
+    "max_ms": 53.08870315551758,
+    "iqr_ms": 0.11945343017578125,
+    "iters": 100
+  },
+  "eager": {
+    "median_ms": 5.422304153442383,
+    "min_ms": 5.3056960105896,
+    "max_ms": 5.517920017242432,
+    "iqr_ms": 0.06502389907836914,
+    "iters": 100
+  },
+  "peak_mib_fused": 807.5029296875,
+  "peak_mib_eager": 1124.8720703125,
+  "speedup": 0.10275749547850234,
+  "peak_ratio": 1.3930253736018277
+}

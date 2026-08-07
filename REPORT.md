@@ -1191,16 +1191,23 @@ Quoted as a **cold** number deliberately: it is what building the forward from s
 that is the number a reviewer wants. The cache does work — see below — but a warm number would
 describe reuse rather than cost.
 
-**The "broken cache" was mine, twice reported and wrong.** `CUTE_DSL_CACHE_DIR`, pinned in
-`env.sh` alongside the Triton and Inductor equivalents since Phase 0, **appears zero times in
-nvidia-cutlass-dsl 4.5.2**. CuTe DSL's persistent cache instead follows `TMPDIR`, resolving to
-`$TMPDIR/<user>/cutlass_python_cache` — and `env.sh` redirects `TMPDIR` into the repo, so the
-cache was working the whole time for anything that sourced it. Every "cache is broken"
-observation came from a direct invocation that set the variable which does nothing and inherited
-the system `TMPDIR`, which Alps purges. **[correlation → diagnosis]**: the variable was set, the
-cache was empty, and I joined them without asking where the cache would be if the variable were
-ignored. `findings/cute-dsl-cache-dir-is-a-noop.md`; upstream note drafted, not filed, and
-deliberately weaker than the other two since nothing there is incorrect — only surprising.
+**Compile is cold on every run, ~9 minutes, and that is our design choice.** **[intervention]** —
+a canonical kernel compiled in two processes with the DSL's own logging on reports `JIT cache
+miss` both times, with a **byte-identical module hash**, and writes nothing. The cause is that
+`cute.compile()` sets `compile_only=True` and `no_cache=True` unconditionally, and `dsl.py`
+disables the file cache when `compile_only` is set. Every kernel here goes through
+`cute.compile()`, so the cache is bypassed *at our request*. The library behaves as its own code
+documents.
+
+That correction cost two wrong reports. I first claimed `CUTE_DSL_CACHE_DIR` "appears zero times
+in the package" — it is built as `f"{prefix}_CACHE_DIR"`, so a literal `grep` cannot find it —
+and then closed R8 on a `TMPDIR` mechanism, having counted 9 files in the cache directory that
+were pytest fixtures. `findings/cute-dsl-cache-dir-is-a-noop.md` is retracted in place; the
+upstream note is deleted, unfiled, since it would have asked NVIDIA to add a variable that exists.
+
+The trade is real and now informed: `cute.compile()` buys an explicitly compiled callable we
+launch repeatedly, at the price of the cache. Whether the `@cute.jit` call path — which caches
+but re-enters dispatch per launch — is better is an open S2 question.
 
 ### 8.6 Standing threads
 
