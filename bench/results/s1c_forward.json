@@ -1,0 +1,125 @@
+{
+  "fixture": "si_small",
+  "sizes": {
+    "node": 216,
+    "edge": 9576,
+    "graph": 1
+  },
+  "launches": 55,
+  "max_volume": 10000,
+  "energy_rel_err": 1.3031794791491097e-15,
+  "worst_live_out": [
+    {
+      "buffer": "gauss_6",
+      "rel": 1.1324274877276907e-14,
+      "template": "T1"
+    },
+    {
+      "buffer": "invstd_22",
+      "rel": 8.46138366156319e-15,
+      "template": "T3"
+    },
+    {
+      "buffer": "rs0_16",
+      "rel": 6.930798222347473e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "mean_18",
+      "rel": 6.744383689403797e-15,
+      "template": "T3"
+    },
+    {
+      "buffer": "cen_19",
+      "rel": 6.6677169237951214e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "rl1_17",
+      "rel": 6.228226087459236e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "rotback_99",
+      "rel": 5.827584866005502e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "damp_98",
+      "rel": 5.6429462532181255e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "env_97",
+      "rel": 5.6015135318224974e-15,
+      "template": "T1"
+    },
+    {
+      "buffer": "invstd_13",
+      "rel": 5.202223758392264e-15,
+      "template": "T3"
+    },
+    {
+      "buffer": "radm1_27",
+      "rel": 4.818512241986365e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "conv1_90",
+      "rel": 4.505318763108553e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "xedge_7",
+      "rel": 4.2389450462582435e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "radm0_26",
+      "rel": 4.185719498001286e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "radm2_28",
+      "rel": 4.148533094335123e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "conv1_m0_86",
+      "rel": 3.993350721846217e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "rosl_103",
+      "rel": 3.975855207472634e-15,
+      "template": "T1"
+    },
+    {
+      "buffer": "rol0_102",
+      "rel": 3.953217296658713e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "invar_101",
+      "rel": 3.9134182631466296e-15,
+      "template": "T2"
+    },
+    {
+      "buffer": "gate_93",
+      "rel": 3.905009094058711e-15,
+      "template": "T2"
+    }
+  ],
+  "pass": true,
+  "costs": {
+    "totals_s": {
+      "schedule": 23.49127099501129,
+      "emit": 0.03992754701175727,
+      "compile": 523.7386447219978,
+      "guard": 0.19437804300832795
+    },
+    "total_s": 547.4642213070292,
+    "guard_fraction": 0.00035505159139763534,
+    "kernels": 55
+  }
+}
