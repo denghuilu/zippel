@@ -386,14 +386,29 @@ genuinely working draws power and drops off max boost — so sitting pinned at 1
 producing 30 % variance says the GPU is idle, waiting. The medium fixtures, which actually load
 the device, are 100× tighter.
 
-**Suspected dominant source: unpinned CPU/NUMA placement relative to the driving GPU.** A GH200
-node presents 4 GPUs across 4 NUMA domains. Neither run pinned the process, so it could land on a
-socket that is not local to GPU 0, and for a workload issuing ~3 500 launches in 30–55 ms
-(~10 µs each, i.e. dispatch-bound) every launch then crosses the interconnect. That is a
-plausible mechanism for an 80 % swing in exactly the configurations where host dispatch dominates
-and for no swing where the device dominates. It is a *hypothesis consistent with all the
-provenance we have*, not yet a confirmed cause — `numactl` was not used in either run, so
-placement was never recorded, only inferred.
+**Dominant source: unpinned CPU/NUMA placement relative to the driving GPU — confirmed by
+intervention.** A GH200 node presents 4 GPUs across 4 NUMA domains. Neither original run pinned
+the process, so it could land on a socket that is not local to GPU 0; for a workload issuing
+~3 500 launches in 30–55 ms (~10 µs each) every launch then crosses the interconnect.
+
+The N = 5 protocol run (array 4377448, five *different* nodes, `numactl --cpunodebind=0
+--membind=0`) tests that directly:
+
+| si_small fp32 | median | in-allocation IQR |
+|---|---|---|
+| unpinned, job 4376123 | 29.79 ms | 0.8 % |
+| unpinned, job 4376140 | 53.67 ms | 29.7 % |
+| **pinned, 5 allocations** | **27.67 ms** (range 27.49–28.58) | **≤ 2.4 %** |
+
+Pinning removes the 80 % between-run swing, collapses the within-run IQR from 16–39 % to
+0.8–2.4 %, and lands *faster than either* unpinned run — which is what local-socket placement
+predicts, since the unpinned runs were paying interconnect crossings on some launches. The
+hypothesis is therefore confirmed by intervention, not merely consistent with the provenance.
+
+Residual spread after pinning is 3.9–5.3 % for the small fixtures against 0.5–2.1 % for the
+medium ones, so a dispatch-bound configuration remains roughly 2–5× noisier than a device-bound
+one even under ideal placement. That residual is the honest floor for host jitter on this
+machine, and it is the number Phase 3 comparisons must clear.
 
 ### Verdict-table protocol (binding from here)
 
@@ -409,11 +424,22 @@ Any number that enters a verdict table is produced by `slurm/verdict.sbatch` +
 * **Host pinning** via `numactl --cpunodebind=0 --membind=0` (available at `/usr/bin/numactl`),
   with the placement echoed into the job log so it is auditable rather than assumed.
 
-**Host jitter is a measurement target, not noise to be averaged away.** The spread across
-allocations is reported per configuration; where it greatly exceeds the in-allocation IQR, the
-dominant variance is between allocations and the configuration is dispatch-bound. That is
-diagnostic information about *what the workload is*, and it is the same axis Phase 2's fusion is
-meant to attack — so it is reported, not smoothed.
+**Host jitter is a measurement target, not noise to be averaged away.** Baseline jitter,
+characterised on 5 pinned allocations across 5 nodes (`bench/results/verdict_summary.json`):
+
+| configuration | med-of-med | full range | spread | max in-allocation IQR |
+|---|---|---|---|---|
+| si_small fp32 | 27.67 ms | 27.49–28.58 | 3.9 % | 2.4 % |
+| si_small bf16 | 29.86 ms | 28.80–30.39 | 5.3 % | 0.8 % |
+| si_medium fp32 | 311.63 ms | 308.62–315.02 | 2.1 % | 0.3 % |
+| si_medium bf16 | 191.44 ms | 190.95–191.85 | 0.5 % | 0.2 % |
+| cu_medium fp32 | 497.45 ms | 493.82–504.35 | 2.1 % | 0.3 % |
+| cu_medium bf16 | 304.93 ms | 303.94–306.30 | 0.8 % | 0.3 % |
+
+**A Phase 3 speedup claim must exceed the spread for its configuration**, not the IQR: ~2 % at
+the medium fixtures, ~4–5 % at the small ones. Where spread greatly exceeds the in-allocation
+IQR, the configuration is dispatch-bound — diagnostic information about what the workload *is*,
+and the same axis Phase 2's fusion attacks, so it is reported rather than smoothed.
 
 ### Secondary metric: max batch (GiB budgets)
 

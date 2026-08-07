@@ -1,0 +1,113 @@
+{
+  "n_allocations": 5,
+  "rows": [
+    {
+      "fixture": "cu_medium",
+      "precision": "bf16",
+      "n_allocations": 5,
+      "median_of_medians_ms": 304.9256591796875,
+      "min_ms": 303.94383239746094,
+      "max_ms": 306.2969665527344,
+      "spread_pct": 0.7717074914600006,
+      "max_in_alloc_iqr_pct": 0.3098018190968202,
+      "distinct_hosts": 5,
+      "hosts": [
+        "nid005345",
+        "nid005724",
+        "nid005725",
+        "nid005726",
+        "nid005728"
+      ]
+    },
+    {
+      "fixture": "cu_medium",
+      "precision": "fp32",
+      "n_allocations": 5,
+      "median_of_medians_ms": 497.44898986816406,
+      "min_ms": 493.82073974609375,
+      "max_ms": 504.3492736816406,
+      "spread_pct": 2.1165052397306483,
+      "max_in_alloc_iqr_pct": 0.273367382173275,
+      "distinct_hosts": 5,
+      "hosts": [
+        "nid005345",
+        "nid005724",
+        "nid005725",
+        "nid005726",
+        "nid005728"
+      ]
+    },
+    {
+      "fixture": "si_medium",
+      "precision": "bf16",
+      "n_allocations": 5,
+      "median_of_medians_ms": 191.438720703125,
+      "min_ms": 190.95152282714844,
+      "max_ms": 191.85196685791016,
+      "spread_pct": 0.4703562724690837,
+      "max_in_alloc_iqr_pct": 0.24980216033201907,
+      "distinct_hosts": 5,
+      "hosts": [
+        "nid005345",
+        "nid005724",
+        "nid005725",
+        "nid005726",
+        "nid005728"
+      ]
+    },
+    {
+      "fixture": "si_medium",
+      "precision": "fp32",
+      "n_allocations": 5,
+      "median_of_medians_ms": 311.63377380371094,
+      "min_ms": 308.62298583984375,
+      "max_ms": 315.01817321777344,
+      "spread_pct": 2.0521483598750856,
+      "max_in_alloc_iqr_pct": 0.3202247552934166,
+      "distinct_hosts": 5,
+      "hosts": [
+        "nid005345",
+        "nid005724",
+        "nid005725",
+        "nid005726",
+        "nid005728"
+      ]
+    },
+    {
+      "fixture": "si_small",
+      "precision": "bf16",
+      "n_allocations": 5,
+      "median_of_medians_ms": 29.85865592956543,
+      "min_ms": 28.798831939697266,
+      "max_ms": 30.38539218902588,
+      "spread_pct": 5.313568879561099,
+      "max_in_alloc_iqr_pct": 0.7820814763040099,
+      "distinct_hosts": 5,
+      "hosts": [
+        "nid005345",
+        "nid005724",
+        "nid005725",
+        "nid005726",
+        "nid005728"
+      ]
+    },
+    {
+      "fixture": "si_small",
+      "precision": "fp32",
+      "n_allocations": 5,
+      "median_of_medians_ms": 27.668015480041504,
+      "min_ms": 27.494112014770508,
+      "max_ms": 28.58246421813965,
+      "spread_pct": 3.9336113721427917,
+      "max_in_alloc_iqr_pct": 2.4478292603181737,
+      "distinct_hosts": 5,
+      "hosts": [
+        "nid005345",
+        "nid005724",
+        "nid005725",
+        "nid005726",
+        "nid005728"
+      ]
+    }
+  ]
+}
