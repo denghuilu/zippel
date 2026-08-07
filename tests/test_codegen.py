@@ -13,6 +13,7 @@ import torch
 from blocks.eso2_ir import build_forward
 from blocks.eso2_ref import BlockConfig, ESO2RefBlock
 from blocks.ir_bind import bind
+from codegen.bounds import assert_within_bound, ordering_bound, reduction_depth
 from codegen.emit import build_kernel, emit_source
 from codegen.schedule import analyze_group, build_schedule, dense_term_count
 from fixtures.load import load_batch
@@ -67,6 +68,8 @@ def test_emitted_wigner_chain_matches_interpreter_exactly(wigner_group):
 
     simp, spec, sched, env, sizes = wigner_group
     Kernel, order = build_kernel(emit_source(simp, sched, dtype="f64"), "wigner_chain_f64")
+    import sys as _sys
+    mod = _sys.modules["zippel_generated.wigner_chain_f64"]
 
     out = spec.live_out[0]
     ref = env[out]
@@ -78,7 +81,11 @@ def test_emitted_wigner_chain_matches_interpreter_exactly(wigner_group):
     cute.compile(Kernel(), *args)(*args)
     torch.cuda.synchronize()
 
-    assert torch.equal(got, ref), f"max abs {(got - ref).abs().max().item():.3e}"
+    # Same mechanism as T2: the kernel shipped its own contract. T1 declares EXACT, so this
+    # asserts bit-equality *and* the bound.
+    assert mod.TEMPLATE == "T1" and mod.EXACT is True
+    assert mod.REDUCTION_DEPTH == reduction_depth(sched)
+    assert_within_bound("wigner_chain", got, ref, ordering_bound(sched, env), exact=mod.EXACT)
 
 
 # ---------------------------------------------------------------------------------------
@@ -111,7 +118,12 @@ def _run_tile(simp, env, sizes, group, name):
     axis = channel_axis(simp, spec)
     assert axis is not None, f"{name} has no channel axis; it is not a T2 candidate"
     sched = build_tile_schedule(simp, spec, *axis)
-    Kernel, order = build_kernel(emit_tile_source(simp, sched, dtype="f64"), f"{name}_f64")
+    module_src = emit_tile_source(simp, sched, dtype="f64")
+    Kernel, order = build_kernel(module_src, f"{name}_f64")
+    import sys as _sys
+    mod = _sys.modules[f"zippel_generated.{name}_f64"]
+    meta = {"TEMPLATE": mod.TEMPLATE, "REDUCTION_DEPTH": mod.REDUCTION_DEPTH,
+            "EXACT": mod.EXACT}
 
     outs = {b: torch.zeros_like(env[b]) for b in spec.live_out}
     tensors = {b: env[b].contiguous() for b in order if b not in outs} | outs
@@ -120,34 +132,26 @@ def _run_tile(simp, env, sizes, group, name):
         Int32(sizes["edge"]), stream)
     cute.compile(Kernel(), *args)(*args)
     torch.cuda.synchronize()
-    return spec, sched, outs
-
-
-def _reduction_bound(reference: torch.Tensor, n_terms: int) -> float:
-    """The most a differently-ordered FP64 sum of `n_terms` may legitimately differ.
-
-    T1's bar is bit-exactness, because its sums are short enough that the emitter and the
-    interpreter add the same values in the same order. T2 contracts over 128 channels, and the
-    interpreter's `einsum` reduces in a blocked order while the emitted kernel reduces
-    sequentially with FMA contraction. Neither is more correct, so the bar is the standard
-    worst-case bound for reordering an n-term FP64 sum rather than equality -- tight enough that
-    a genuine codegen error cannot hide under it (the observed error is ~1e-15 against a bound of
-    ~4e-15, while a wrong term or a missing barrier moves the result by O(1)).
-    """
-    eps = torch.finfo(torch.float64).eps
-    return eps * (n_terms ** 0.5) * reference.abs().max().item()
+    return spec, sched, outs, meta
 
 
 @cuda
-def test_t2_channel_contraction_matches_interpreter(forward_env):
-    """A per-edge 128->128 Linear, channels on threads, contracted through gmem."""
+def test_t2_channel_contraction_is_within_its_shipped_bound(forward_env):
+    """A per-edge 128->128 Linear, channels on threads, contracted through gmem.
+
+    The bound is not written here. The emitter shipped `REDUCTION_DEPTH` with the kernel, and
+    `codegen.bounds` turns it into a number against the real inputs (D25).
+    """
     simp, env, sizes, groups = forward_env
     group = next(g for g in groups if g == ["rl0_8"])
-    spec, sched, outs = _run_tile(simp, env, sizes, group, "radial_lin0")
+    spec, sched, outs, meta = _run_tile(simp, env, sizes, group, "radial_lin0")
 
-    got, ref = outs["rl0_8"], env["rl0_8"]
-    err = (got - ref).abs().max().item()
-    assert err <= _reduction_bound(ref, 128), f"{err:.3e} exceeds the reduction-order bound"
+    bound = ordering_bound(sched, env)
+    err = assert_within_bound("radial_lin0", outs["rl0_8"], env["rl0_8"], bound,
+                              exact=meta["EXACT"])
+    assert meta["REDUCTION_DEPTH"] == reduction_depth(sched), \
+        "the shipped depth no longer matches the schedule that produced it"
+    assert meta["TEMPLATE"] == "T2" and meta["EXACT"] is False
     assert err > 0.0, "exactly equal to a blocked einsum would mean the test is not exercising it"
 
 
@@ -161,12 +165,12 @@ def test_t2_stages_an_in_group_value_through_smem(forward_env):
     """
     simp, env, sizes, groups = forward_env
     group = next(g for g in groups if "rs0_16" in g and "rl1_17" in g)
-    spec, sched, outs = _run_tile(simp, env, sizes, group, "radial_stage2")
+    spec, sched, outs, meta = _run_tile(simp, env, sizes, group, "radial_stage2")
 
     assert "rs0_16" in sched.staged, "the in-group contracted value was not staged to smem"
-    got, ref = outs["rl1_17"], env["rl1_17"]
-    err = (got - ref).abs().max().item()
-    assert err <= _reduction_bound(ref, 128), f"{err:.3e} exceeds the reduction-order bound"
+    bound = ordering_bound(sched, env)
+    assert_within_bound("radial_stage2", outs["rl1_17"], env["rl1_17"], bound,
+                        exact=meta["EXACT"])
 
 
 def test_t1_refuses_a_channel_group(forward_env):

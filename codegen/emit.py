@@ -92,6 +92,7 @@ def emit_source(prog: Program, sched: Schedule, block: int = 128,
             f"budget -- it is not a register-resident group. Use a channel-parallel mapping "
             f"(bucket B) or split the group.")
     dt = DTYPE[dtype]
+    depth = max((len(a.terms) for a in sched.assigns), default=1)
 
     # tensors the kernel takes, in a stable order
     tensors = [b for b in spec.live_in if not isinstance(prog.type_of(b), IndexType)]
@@ -146,6 +147,13 @@ from cutlass.cute.runtime import from_dlpack
 
 BLOCK = {block}
 TENSOR_ORDER = {tensors!r}
+
+#: Correctness contract for this kernel (DECISIONS.md D25). REDUCTION_DEPTH is the most terms
+#: any single output element sums; the harness turns it into a numeric bound against real
+#: inputs and asserts measured <= bound. EXACT additionally demands bit-equality.
+TEMPLATE = "T1"
+REDUCTION_DEPTH = {depth}
+EXACT = True
 
 
 class Kernel:

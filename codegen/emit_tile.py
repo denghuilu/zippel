@@ -52,6 +52,7 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32") -> 
     spec = sched.spec
     dt = DTYPE[dtype]
     C = sched.extent
+    depth = max((len(a.terms) for a in sched.assigns), default=1)
 
     tensors = [b for b in spec.live_in if not isinstance(prog.type_of(b), IndexType)]
     tensors += list(spec.live_out)
@@ -117,6 +118,13 @@ from cutlass.cute.runtime import from_dlpack
 
 CHANNELS = {C}
 TENSOR_ORDER = {tensors!r}
+
+#: Correctness contract for this kernel (DECISIONS.md D25). A channel contraction cannot be
+#: bit-exact against a blocked einsum, so the bar is the ordering bound the harness derives
+#: from REDUCTION_DEPTH and the real input magnitudes.
+TEMPLATE = "T2"
+REDUCTION_DEPTH = {depth}
+EXACT = False
 
 
 class Kernel:

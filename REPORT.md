@@ -968,6 +968,38 @@ algebraic extension rather than a transcendental one. Full write-up in
 `sin`/`cos` are left in v1.1 rather than removed, so an architecture that genuinely needs them
 (an S² grid activation, or spherical harmonics of an angle) stays expressible.
 
+### 8.5b The precision contract, arriving early
+
+Phase 3 was to decide a precision policy per table row. Phase 2's S1b forced part of it at S1b
+instead, because the honest correctness bar stopped being "equal".
+
+A T1 kernel and the FP64 interpreter sum the same short terms in the same order, so any
+difference is a codegen bug and bit-equality is the bar; the Wigner chain meets it at 0.000e+00.
+A T2 kernel contracts over 128-320 channels, where the interpreter reduces blocked and the kernel
+sequentially with FMA contraction. Neither is more correct, and demanding equality would be
+demanding that two valid summation orders agree.
+
+So each kernel now **ships its own bound** (D25). The emitter computes the reduction depth of the
+schedule it just emitted and attaches it as module metadata; `codegen/bounds.py` turns that into
+a number against the real inputs — `2·(depth−1)·eps·max Σ|terms|`, the standard reordering bound,
+taken over Σ|terms| rather than over the result so that cancellation cannot make it too tight —
+and the harness asserts `measured ≤ bound` for every emitted kernel automatically.
+
+| kernel | template | depth | bound | measured |
+|---|---|---|---|---|
+| wigner_chain | T1 | 5 | 1.776e-15 | **0.000e+00** (exact) |
+| radial_lin0 | T2 | 321 | 9.321e-13 | 1.554e-15 |
+| radial_stage2 | T2 | 129 | 1.658e-13 | 1.554e-15 |
+
+That the T2 discrepancy is *purely* ordering was established rather than assumed: a naive
+same-order FP64 reference differs from the interpreter by the identical 1.554e-15.
+
+The mechanism matters more than the numbers. A bound cannot be loosened without changing the
+schedule that produced it, so "the tolerance was widened" cannot be a quiet step. Its honest
+limitation: a rigorous worst-case bound is loose — measured errors are 0.2–0.9 % of it — so it
+catches what actually goes wrong in generated code (a dropped term, a missing barrier, a
+transposed index, all O(1)) and is not a sub-ulp check.
+
 ### 8.6 Standing threads
 
 | thread | status |
