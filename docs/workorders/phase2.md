@@ -1,7 +1,8 @@
 # Phase 2 Work Order — CuTe DSL fused kernels
 
 **Status: DRAFT, awaiting review.** Drafted by me from the template taxonomy (`docs/templates.md`),
-D22/D23/D24, and the corrected fusion-group table. Not started beyond S1a.
+D22/D23/D24, and the corrected fusion-group table. S1a complete; S1b has its first correct
+kernels. Nothing here is a commitment until reviewed.
 
 ---
 
@@ -134,7 +135,7 @@ Unchanged in structure from Phase 1, extended to the generated kernels:
 
 ```
 generated CuTe DSL kernel
-  ↓ bit-exact in FP64 (the emitter reorders nothing, so any difference is a codegen bug)
+  ↓ T1: bit-exact in FP64.  T2: within the reduction-order bound (see below)
 FP64 segmented-polynomial interpreter
   ↓ validated in Phase 1 at 2.6e-16 / 4.97e-15 / 3.7e-16
 blocks/eso2_ref.py
