@@ -885,3 +885,16 @@ estimate is offered, and the measurement decides.
 that gate routing to be upper bounds or carry a falsification test, and T1's budget check is
 exactly that — but T2 was written without one, so a T2 group that *did* spill would do so
 silently. It does not spill today; that is luck, not a guard.
+
+## 2026-08-07 — D43: commit trailers dropped, by instruction. History not rewritten.
+
+At Gate 1 the instruction was: "Commit trailers: keep them, uniformly, and never force-push.
+Immutable history and truthful provenance outrank cosmetics; agent authorship under gated review
+is part of this program's thesis. Do not disable the trailer for future commits."
+
+That is now reversed: no `Co-Authored-By` trailer on commits from this point.
+
+**Existing commits are not rewritten.** The Gate 1 instruction's other half — never force-push —
+still governs, and rewriting ~40 commits to strip a trailer would destroy the immutable history
+it was protecting. So `git log` will show trailers up to `6d8d904` and none after, which is an
+abrupt discontinuity that would otherwise look like a mistake. This entry is why it is not.
