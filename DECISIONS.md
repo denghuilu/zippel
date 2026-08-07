@@ -826,3 +826,62 @@ fusion competes at all, the forward must drop below eager's entire fwd+bwd+dbwd:
 **What remains true.** The memory ratio holds at 1.39–1.42x across a 27x size range and both
 dtypes. That is the axis the bet rides on, measured on the pass with the least to gain, and it is
 the one piece of the S1c result that is already favourable.
+
+## 2026-08-07 — D42: the S1c deficit is uncoalesced weight access in T2. Three hypotheses refuted, one quantitatively consistent.
+
+Per-kernel breakdown, si_medium f32, 55 kernels, 1392 ms total. **[measurement]**
+
+    rank  grp  tmpl        ms   share    cum   instr/thr   issue-bound     meas/bound  ops
+       1   43    T2   714.803   51.3%  51.3%      10,246   10.2-40.7 ms         70.3x  conv1_90
+       2   46    T2   344.688   24.8%  76.1%       5,126    5.1-20.4            67.7x  conv2_95
+       3   39    T2   190.453   13.7%  89.8%       1,537    7.6-30.5            25.0x  conv1_m0_86
+
+    template  kernels        ms   share
+          T1       22      3.20    0.2%
+          T2       24   1376.62   98.9%
+          T3        9     12.51    0.9%
+
+**Three kernels are 89.8 % of the forward, all of them the SO(2) convolution, all T2.**
+
+**D39 is refuted a second time and more sharply.** I diagnosed occupancy starvation, predicted
+si_medium would improve ~10x, and it got worse. Now the breakdown shows the T1 kernels — the ones
+at 3.5 % occupancy that I identified as the problem — are **0.2 % of runtime**. Making them
+infinitely fast changes nothing. The cost is entirely in T2, the template that is *saturated* at
+453 % occupancy. I was not merely wrong about the magnitude; I was pointing at the wrong kernels.
+
+**Four hypotheses, three dead:**
+
+| hypothesis | test | verdict |
+|---|---|---|
+| occupancy starvation | T1 (3.5 % occupied) is 0.2 % of runtime | **refuted** |
+| issue-bound | measured/issue-floor is 18–70x | **refuted** |
+| register spilling | ~113 live scalars per thread against 255 registers; T2 has no budget check, but does not need one here | **refuted** |
+| uncoalesced access | see below | **consistent** |
+
+**The mechanism. [static analysis, quantitatively consistent with measurement]** `c1_w1a` has
+type `none[j:2, o:128, k:2, c:256]`, and T2 puts the thread index on `o`. Row-major, consecutive
+threads therefore read addresses **512 elements = 2 048 B apart**, so all 32 lanes of a warp touch
+32 distinct 128-byte lines on every load. Arithmetic:
+
+    33,212,672 threads x 10,246 instr, half of them loads
+      -> 5.32e9 warp-level load instructions
+      -> 20 ms at one coalesced load per cycle per SM
+      -> x32 transactions when uncoalesced = 651 ms
+    measured: 714.8 ms
+
+**651 against 715 — 9 % apart, with no fitted parameter.** None of the other three hypotheses
+lands within an order of magnitude. This is not proof; it is the only surviving explanation that
+predicts the number, and it is stated as such.
+
+**Intervention (c), re-aimed by review and now targeted by data:** block-cooperative restructure
+of `conv1_90` — stage the shared weight tile in smem with a *coalesced* cooperative load, then
+have each thread read its slice from smem. `c1_w2a`/`c1_w2b` are 128 KiB and fit the ~228 KiB/SM
+budget outright; `c1_w1a`/`c1_w1b` are 512 KiB and need tiling over `k`. Predicted effect is
+bounded below by removing the 32x transaction amplification on the weight reads; no point
+estimate is offered, and the measurement decides.
+
+**A gap found while testing the spilling hypothesis, recorded though it is not the cause here:**
+`emit_tile_source` (T2) has **no register-budget precondition at all**. D26 requires estimators
+that gate routing to be upper bounds or carry a falsification test, and T1's budget check is
+exactly that — but T2 was written without one, so a T2 group that *did* spill would do so
+silently. It does not spill today; that is luck, not a guard.

@@ -104,14 +104,21 @@ def static_census(prog, sched, template: str, sizes: dict) -> dict:
             elems_per_seg *= x
         n_bseg = 1 if bseg == "none" else sizes.get(bseg, 1)
         global_unique = n_bseg * elems_per_seg
-        # elements one thread reads: a CH component spans the channel extent
-        per_thread = 0
-        for idx in idxs:
-            per_thread += ch if any(isinstance(i, Ch) for i in idx) else 1
+        # Elements ONE thread reads. A `Ch` component resolves to that thread's own channel --
+        # one element, not `ch` of them. Multiplying by `ch` here (the first version) counted the
+        # whole warp's reads as if a single thread made them, inflating every CH-indexed buffer's
+        # sharing by exactly the channel extent and producing "sharing == thread count", which is
+        # the signature of the bug rather than of the workload.
+        per_thread = len(idxs)
         total_reads = threads * per_thread
         itemsize = 4
+        # Footprint that matters for staging is what ONE BLOCK needs resident, not the global
+        # buffer: a per-edge operand needs only its own segment's slice in smem, while a shared
+        # weight needs the whole thing.
+        block_footprint = elems_per_seg * itemsize / 1024
         sharing[buf] = {"sharing": total_reads / max(global_unique, 1),
-                        "footprint_kib": global_unique * itemsize / 1024,
+                        "global_kib": global_unique * itemsize / 1024,
+                        "block_kib": block_footprint,
                         "segment": bseg}
 
     # issue-bound floor: total thread-instructions / peak issue rate, with an efficiency interval
@@ -205,17 +212,19 @@ def main():
               f"{','.join(r['ops'][:2])}", flush=True)
 
     print(f"\n=== cross-thread sharing: buffers worth staging in smem ===")
-    print(f"{'grp':>4} {'buffer':>16} {'seg':>6} {'sharing':>10} {'footprint':>11}  verdict")
+    print(f"{'grp':>4} {'buffer':>16} {'seg':>6} {'sharing':>10} {'per-block':>10} "
+          f"{'global':>11}  verdict")
     seen = set()
     for r in rows[:8]:
         for buf, info in sorted(r["sharing"].items(), key=lambda kv: -kv[1]["sharing"]):
             if info["sharing"] < 2 or (r["group"], buf) in seen:
                 continue
             seen.add((r["group"], buf))
-            fits = info["footprint_kib"] <= 200          # ~228 KiB smem/SM on Hopper
+            fits = info["block_kib"] <= 200              # ~228 KiB smem/SM on Hopper
             print(f"{r['group']:>4} {buf:>16} {info['segment']:>6} "
-                  f"{info['sharing']:>9.1f}x {info['footprint_kib']:>9.1f}K  "
-                  f"{'SMEM CANDIDATE' if fits else 'too large for smem'}", flush=True)
+                  f"{info['sharing']:>9.1f}x {info['block_kib']:>9.1f}K "
+                  f"{info['global_kib']:>10.0f}K  "
+                  f"{'SMEM CANDIDATE' if fits else 'block slice too large'}", flush=True)
 
     by_t = {}
     for r in rows:

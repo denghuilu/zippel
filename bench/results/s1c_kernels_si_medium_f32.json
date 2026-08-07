@@ -1,0 +1,1979 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "edges": 259474,
+  "total_ms": 1392.3301682434976,
+  "kernels": [
+    {
+      "group": 43,
+      "name": "prof_si_medium_g43",
+      "template": "T2",
+      "ops": [
+        "conv1_90"
+      ],
+      "ms": 714.8026733398438,
+      "terms": 5123,
+      "factor_reads": 660867,
+      "distinct_reads": 4100,
+      "intra_thread_reuse": 161.1870731707317,
+      "instr_per_thread": 10246,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 10.172063835322925,
+      "issue_bound_ms_hi": 40.6882553412917,
+      "sharing": {
+        "conv1_m0_86": {
+          "sharing": 76.8,
+          "footprint_kib": 648685.0,
+          "segment": "edge"
+        },
+        "unit_m": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "conv1_mod1_88": {
+          "sharing": 128.0,
+          "footprint_kib": 1037896.0,
+          "segment": "edge"
+        },
+        "c1_w1a": {
+          "sharing": 33212672.0,
+          "footprint_kib": 512.0,
+          "segment": "none"
+        },
+        "c1_w1b": {
+          "sharing": 33212672.0,
+          "footprint_kib": 512.0,
+          "segment": "none"
+        },
+        "conv1_mod2_89": {
+          "sharing": 128.0,
+          "footprint_kib": 518948.0,
+          "segment": "edge"
+        },
+        "c1_w2a": {
+          "sharing": 33212672.0,
+          "footprint_kib": 128.0,
+          "segment": "none"
+        },
+        "c1_w2b": {
+          "sharing": 33212672.0,
+          "footprint_kib": 128.0,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 46,
+      "name": "prof_si_medium_g46",
+      "template": "T2",
+      "ops": [
+        "conv2_95"
+      ],
+      "ms": 344.68756103515625,
+      "terms": 2563,
+      "factor_reads": 330627,
+      "distinct_reads": 2052,
+      "intra_thread_reuse": 161.12426900584796,
+      "instr_per_thread": 5126,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 5.089010269360269,
+      "issue_bound_ms_hi": 20.356041077441077,
+      "sharing": {
+        "conv2_m0_94": {
+          "sharing": 128.0,
+          "footprint_kib": 389211.0,
+          "segment": "edge"
+        },
+        "unit_m": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "gate_93": {
+          "sharing": 85.33333333333333,
+          "footprint_kib": 1167633.0,
+          "segment": "edge"
+        },
+        "c2_w1a": {
+          "sharing": 33212672.0,
+          "footprint_kib": 256.0,
+          "segment": "none"
+        },
+        "c2_w1b": {
+          "sharing": 33212672.0,
+          "footprint_kib": 256.0,
+          "segment": "none"
+        },
+        "c2_w2a": {
+          "sharing": 33212672.0,
+          "footprint_kib": 64.0,
+          "segment": "none"
+        },
+        "c2_w2b": {
+          "sharing": 33212672.0,
+          "footprint_kib": 64.0,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 39,
+      "name": "prof_si_medium_g39",
+      "template": "T2",
+      "ops": [
+        "conv1_m0_86"
+      ],
+      "ms": 190.45263671875,
+      "terms": 769,
+      "factor_reads": 492928,
+      "distinct_reads": 1537,
+      "intra_thread_reuse": 320.70787247885494,
+      "instr_per_thread": 1537,
+      "threads": 166063360,
+      "issue_bound_ms_lo": 7.629544268441996,
+      "issue_bound_ms_hi": 30.518177073767983,
+      "sharing": {
+        "conv1_mod0_85": {
+          "sharing": 640.0,
+          "footprint_kib": 778422.0,
+          "segment": "edge"
+        },
+        "c1_w0": {
+          "sharing": 166063360.0,
+          "footprint_kib": 1920.0,
+          "segment": "none"
+        },
+        "c1_b0": {
+          "sharing": 166063360.0,
+          "footprint_kib": 2.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 45,
+      "name": "prof_si_medium_g45",
+      "template": "T2",
+      "ops": [
+        "conv2_m0_94"
+      ],
+      "ms": 41.53862380981445,
+      "terms": 385,
+      "factor_reads": 148224,
+      "distinct_reads": 769,
+      "intra_thread_reuse": 192.74902470741222,
+      "instr_per_thread": 769,
+      "threads": 99638016,
+      "issue_bound_ms_lo": 2.290352456382002,
+      "issue_bound_ms_hi": 9.161409825528008,
+      "sharing": {
+        "gate_93": {
+          "sharing": 128.0,
+          "footprint_kib": 1167633.0,
+          "segment": "edge"
+        },
+        "c2_w0": {
+          "sharing": 99638016.0,
+          "footprint_kib": 576.0,
+          "segment": "none"
+        },
+        "c2_b0": {
+          "sharing": 99638016.0,
+          "footprint_kib": 1.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 14,
+      "name": "prof_si_medium_g14",
+      "template": "T2",
+      "ops": [
+        "radm0_26"
+      ],
+      "ms": 35.15139389038086,
+      "terms": 387,
+      "factor_reads": 99456,
+      "distinct_reads": 515,
+      "intra_thread_reuse": 193.11844660194174,
+      "instr_per_thread": 771,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 1.5308727731864096,
+      "issue_bound_ms_hi": 6.123491092745638,
+      "sharing": {
+        "rs1_25": {
+          "sharing": 256.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "rad_wm0": {
+          "sharing": 66425344.0,
+          "footprint_kib": 384.0,
+          "segment": "none"
+        },
+        "rad_bm0": {
+          "sharing": 66425344.0,
+          "footprint_kib": 3.0,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 15,
+      "name": "prof_si_medium_g15",
+      "template": "T2",
+      "ops": [
+        "radm1_27"
+      ],
+      "ms": 17.46112060546875,
+      "terms": 258,
+      "factor_reads": 66304,
+      "distinct_reads": 386,
+      "intra_thread_reuse": 171.77202072538861,
+      "instr_per_thread": 514,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 1.0205818487909397,
+      "issue_bound_ms_hi": 4.082327395163759,
+      "sharing": {
+        "rs1_25": {
+          "sharing": 256.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "rad_wm1": {
+          "sharing": 66425344.0,
+          "footprint_kib": 256.0,
+          "segment": "none"
+        },
+        "rad_bm1": {
+          "sharing": 66425344.0,
+          "footprint_kib": 2.0,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 4,
+      "name": "prof_si_medium_g4",
+      "template": "T2",
+      "ops": [
+        "rl0_8"
+      ],
+      "ms": 11.495295524597168,
+      "terms": 321,
+      "factor_reads": 41408,
+      "distinct_reads": 641,
+      "intra_thread_reuse": 64.5990639625585,
+      "instr_per_thread": 641,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.6363744796449342,
+      "issue_bound_ms_hi": 2.545497918579737,
+      "sharing": {
+        "xedge_7": {
+          "sharing": 128.0,
+          "footprint_kib": 324342.5,
+          "segment": "edge"
+        },
+        "rad_w0": {
+          "sharing": 33212672.0,
+          "footprint_kib": 160.0,
+          "segment": "none"
+        },
+        "rad_b0": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 16,
+      "name": "prof_si_medium_g16",
+      "template": "T2",
+      "ops": [
+        "radm2_28"
+      ],
+      "ms": 9.210335731506348,
+      "terms": 129,
+      "factor_reads": 33152,
+      "distinct_reads": 257,
+      "intra_thread_reuse": 128.99610894941634,
+      "instr_per_thread": 257,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 0.5102909243954699,
+      "issue_bound_ms_hi": 2.0411636975818794,
+      "sharing": {
+        "rs1_25": {
+          "sharing": 256.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "rad_wm2": {
+          "sharing": 66425344.0,
+          "footprint_kib": 128.0,
+          "segment": "none"
+        },
+        "rad_bm2": {
+          "sharing": 66425344.0,
+          "footprint_kib": 1.0,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 36,
+      "name": "prof_si_medium_g36",
+      "template": "T3",
+      "ops": [
+        "cat_83"
+      ],
+      "ms": 8.088191986083984,
+      "terms": 2304,
+      "factor_reads": 2304,
+      "distinct_reads": 1152,
+      "intra_thread_reuse": 2.0,
+      "instr_per_thread": 2304,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.017870110192837466,
+      "issue_bound_ms_hi": 0.07148044077134987,
+      "sharing": {
+        "x_node": {
+          "sharing": 44.49142661179698,
+          "footprint_kib": 26244.0,
+          "segment": "node"
+        }
+      }
+    },
+    {
+      "group": 9,
+      "name": "prof_si_medium_g9",
+      "template": "T2",
+      "ops": [
+        "rl1_17"
+      ],
+      "ms": 4.615359783172607,
+      "terms": 129,
+      "factor_reads": 16640,
+      "distinct_reads": 257,
+      "intra_thread_reuse": 64.74708171206225,
+      "instr_per_thread": 257,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.25514546219773493,
+      "issue_bound_ms_hi": 1.0205818487909397,
+      "sharing": {
+        "rs0_16": {
+          "sharing": 128.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "rad_w1": {
+          "sharing": 33212672.0,
+          "footprint_kib": 64.0,
+          "segment": "none"
+        },
+        "rad_b1": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 49,
+      "name": "prof_si_medium_g49",
+      "template": "T3",
+      "ops": [
+        "scatter_100"
+      ],
+      "ms": 4.05625581741333,
+      "terms": 1152,
+      "factor_reads": 1152,
+      "distinct_reads": 1152,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 1152,
+      "threads": 5832,
+      "issue_bound_ms_lo": 0.0002008264462809917,
+      "issue_bound_ms_hi": 0.0008033057851239669,
+      "sharing": {
+        "rotback_99": {
+          "sharing": 0.02247624039402792,
+          "footprint_kib": 1167633.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 37,
+      "name": "prof_si_medium_g37",
+      "template": "T2",
+      "ops": [
+        "rotin_84"
+      ],
+      "ms": 1.5682560205459595,
+      "terms": 81,
+      "factor_reads": 20817,
+      "distinct_reads": 90,
+      "intra_thread_reuse": 231.3,
+      "instr_per_thread": 162,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 0.3216619834710744,
+      "issue_bound_ms_hi": 1.2866479338842975,
+      "sharing": {
+        "rot_82": {
+          "sharing": 256.0,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        },
+        "cat_83": {
+          "sharing": 256.0,
+          "footprint_kib": 2335266.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 48,
+      "name": "prof_si_medium_g48",
+      "template": "T2",
+      "ops": [
+        "rotback_99"
+      ],
+      "ms": 0.8612800240516663,
+      "terms": 81,
+      "factor_reads": 10449,
+      "distinct_reads": 90,
+      "intra_thread_reuse": 116.1,
+      "instr_per_thread": 162,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.1608309917355372,
+      "issue_bound_ms_hi": 0.6433239669421488,
+      "sharing": {
+        "rot_82": {
+          "sharing": 128.0,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        },
+        "damp_98": {
+          "sharing": 128.0,
+          "footprint_kib": 1167633.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 44,
+      "name": "prof_si_medium_g44",
+      "template": "T2",
+      "ops": [
+        "gsilu_92",
+        "gate_93"
+      ],
+      "ms": 0.7472959756851196,
+      "terms": 9,
+      "factor_reads": 2057,
+      "distinct_reads": 11,
+      "intra_thread_reuse": 187.0,
+      "instr_per_thread": 53,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.05261754667891031,
+      "issue_bound_ms_hi": 0.21047018671564124,
+      "sharing": {
+        "conv1_90": {
+          "sharing": 128.0,
+          "footprint_kib": 1167633.0,
+          "segment": "edge"
+        },
+        "gsig_91": {
+          "sharing": 128.0,
+          "footprint_kib": 259474.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 41,
+      "name": "prof_si_medium_g41",
+      "template": "T2",
+      "ops": [
+        "conv1_mod1_88"
+      ],
+      "ms": 0.7327679991722107,
+      "terms": 4,
+      "factor_reads": 2048,
+      "distinct_reads": 6,
+      "intra_thread_reuse": 341.3333333333333,
+      "instr_per_thread": 8,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 0.0158845423936333,
+      "issue_bound_ms_hi": 0.0635381695745332,
+      "sharing": {
+        "rotin_84": {
+          "sharing": 113.77777777777777,
+          "footprint_kib": 2335266.0,
+          "segment": "edge"
+        },
+        "radm1_27": {
+          "sharing": 256.0,
+          "footprint_kib": 518948.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 47,
+      "name": "prof_si_medium_g47",
+      "template": "T2",
+      "ops": [
+        "damp_98"
+      ],
+      "ms": 0.673471987247467,
+      "terms": 9,
+      "factor_reads": 1161,
+      "distinct_reads": 10,
+      "intra_thread_reuse": 116.1,
+      "instr_per_thread": 18,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.017870110192837466,
+      "issue_bound_ms_hi": 0.07148044077134987,
+      "sharing": {
+        "conv2_95": {
+          "sharing": 128.0,
+          "footprint_kib": 1167633.0,
+          "segment": "edge"
+        },
+        "env_97": {
+          "sharing": 128.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 38,
+      "name": "prof_si_medium_g38",
+      "template": "T2",
+      "ops": [
+        "conv1_mod0_85"
+      ],
+      "ms": 0.654911994934082,
+      "terms": 3,
+      "factor_reads": 1536,
+      "distinct_reads": 6,
+      "intra_thread_reuse": 256.0,
+      "instr_per_thread": 6,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 0.011913406795224976,
+      "issue_bound_ms_hi": 0.0476536271808999,
+      "sharing": {
+        "rotin_84": {
+          "sharing": 85.33333333333333,
+          "footprint_kib": 2335266.0,
+          "segment": "edge"
+        },
+        "radm0_26": {
+          "sharing": 256.0,
+          "footprint_kib": 778422.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 42,
+      "name": "prof_si_medium_g42",
+      "template": "T2",
+      "ops": [
+        "conv1_mod2_89"
+      ],
+      "ms": 0.39401599764823914,
+      "terms": 2,
+      "factor_reads": 1024,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 341.3333333333333,
+      "instr_per_thread": 4,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 0.00794227119681665,
+      "issue_bound_ms_hi": 0.0317690847872666,
+      "sharing": {
+        "rotin_84": {
+          "sharing": 56.888888888888886,
+          "footprint_kib": 2335266.0,
+          "segment": "edge"
+        },
+        "radm2_28": {
+          "sharing": 256.0,
+          "footprint_kib": 259474.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 35,
+      "name": "prof_si_medium_g35",
+      "template": "T1",
+      "ops": [
+        "Xc2_76"
+      ],
+      "ms": 0.37113600969314575,
+      "terms": 10,
+      "factor_reads": 20,
+      "distinct_reads": 7,
+      "intra_thread_reuse": 2.857142857142857,
+      "instr_per_thread": 20,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.00015512248431282522,
+      "issue_bound_ms_hi": 0.0006204899372513009,
+      "sharing": {
+        "ca2_50": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "sa2_53": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ca1_46": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "sa1_47": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "zero_43": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ones": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 30,
+      "name": "prof_si_medium_g30",
+      "template": "T1",
+      "ops": [
+        "Xa1_67",
+        "aj1_70",
+        "ajb1_71",
+        "ajbj1_72",
+        "w1_73"
+      ],
+      "ms": 0.36908799409866333,
+      "terms": 102,
+      "factor_reads": 108,
+      "distinct_reads": 32,
+      "intra_thread_reuse": 3.375,
+      "instr_per_thread": 204,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.0015822493399908172,
+      "issue_bound_ms_hi": 0.006328997359963269,
+      "sharing": {
+        "cg1_55": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "sg1_58": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "sg0_57": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "cg0_54": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "jd": {
+          "sharing": 28830.444444444445,
+          "footprint_kib": 0.31640625,
+          "segment": "none"
+        },
+        "Xb1_68": {
+          "sharing": 0.1111111111111111,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        },
+        "Xc1_69": {
+          "sharing": 0.1111111111111111,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 34,
+      "name": "prof_si_medium_g34",
+      "template": "T1",
+      "ops": [
+        "Xb2_75"
+      ],
+      "ms": 0.3660160005092621,
+      "terms": 10,
+      "factor_reads": 20,
+      "distinct_reads": 7,
+      "intra_thread_reuse": 2.857142857142857,
+      "instr_per_thread": 20,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.00015512248431282522,
+      "issue_bound_ms_hi": 0.0006204899372513009,
+      "sharing": {
+        "T2_40": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "sb2_45": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "yh_33": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "sb1_44": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "zero_43": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ones": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 32,
+      "name": "prof_si_medium_g32",
+      "template": "T1",
+      "ops": [
+        "Xc1_69"
+      ],
+      "ms": 0.3654400110244751,
+      "terms": 6,
+      "factor_reads": 12,
+      "distinct_reads": 5,
+      "intra_thread_reuse": 2.4,
+      "instr_per_thread": 12,
+      "threads": 259474,
+      "issue_bound_ms_lo": 9.307349058769512e-05,
+      "issue_bound_ms_hi": 0.0003722939623507805,
+      "sharing": {
+        "ca1_46": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "sa1_47": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "zero_43": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ones": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 31,
+      "name": "prof_si_medium_g31",
+      "template": "T1",
+      "ops": [
+        "Xb1_68"
+      ],
+      "ms": 0.3609920144081116,
+      "terms": 6,
+      "factor_reads": 12,
+      "distinct_reads": 5,
+      "intra_thread_reuse": 2.4,
+      "instr_per_thread": 12,
+      "threads": 259474,
+      "issue_bound_ms_lo": 9.307349058769512e-05,
+      "issue_bound_ms_hi": 0.0003722939623507805,
+      "sharing": {
+        "yh_33": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "sb1_44": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "zero_43": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ones": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 29,
+      "name": "prof_si_medium_g29",
+      "template": "T1",
+      "ops": [
+        "Xb0_61"
+      ],
+      "ms": 0.3527359962463379,
+      "terms": 2,
+      "factor_reads": 4,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 1.3333333333333333,
+      "instr_per_thread": 4,
+      "threads": 259474,
+      "issue_bound_ms_lo": 3.102449686256504e-05,
+      "issue_bound_ms_hi": 0.00012409798745026016,
+      "sharing": {
+        "zero_43": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "ones": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 28,
+      "name": "prof_si_medium_g28",
+      "template": "T1",
+      "ops": [
+        "Xa0_60",
+        "aj0_63",
+        "ajb0_64",
+        "ajbj0_65",
+        "w0_66",
+        "wigner_81",
+        "rot_82"
+      ],
+      "ms": 0.3391999900341034,
+      "terms": 356,
+      "factor_reads": 357,
+      "distinct_reads": 120,
+      "intra_thread_reuse": 2.975,
+      "instr_per_thread": 677,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.005250896093989134,
+      "issue_bound_ms_hi": 0.021003584375956535,
+      "sharing": {
+        "sg0_57": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "cg0_54": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "jd": {
+          "sharing": 3203.382716049383,
+          "footprint_kib": 0.31640625,
+          "segment": "none"
+        },
+        "Xb0_61": {
+          "sharing": 0.012345679012345678,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        },
+        "w1_73": {
+          "sharing": 0.1111111111111111,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        },
+        "w2_80": {
+          "sharing": 0.30864197530864196,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        },
+        "to_m": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.31640625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 33,
+      "name": "prof_si_medium_g33",
+      "template": "T1",
+      "ops": [
+        "Xa2_74",
+        "aj2_77",
+        "ajb2_78",
+        "ajbj2_79",
+        "w2_80"
+      ],
+      "ms": 0.33635199069976807,
+      "terms": 430,
+      "factor_reads": 440,
+      "distinct_reads": 82,
+      "intra_thread_reuse": 5.365853658536586,
+      "instr_per_thread": 860,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.006670266825451484,
+      "issue_bound_ms_hi": 0.026681067301805937,
+      "sharing": {
+        "cg2_56": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "unit_mat": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "sg2_59": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "cg1_55": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "sg1_58": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "sg0_57": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "cg0_54": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "jd": {
+          "sharing": 80084.56790123456,
+          "footprint_kib": 0.31640625,
+          "segment": "none"
+        },
+        "Xb2_75": {
+          "sharing": 0.30864197530864196,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        },
+        "Xc2_76": {
+          "sharing": 0.30864197530864196,
+          "footprint_kib": 82099.1953125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 51,
+      "name": "prof_si_medium_g51",
+      "template": "T2",
+      "ops": [
+        "rol0_102"
+      ],
+      "ms": 0.3277440071105957,
+      "terms": 385,
+      "factor_reads": 49664,
+      "distinct_reads": 769,
+      "intra_thread_reuse": 64.58257477243173,
+      "instr_per_thread": 769,
+      "threads": 746496,
+      "issue_bound_ms_lo": 0.017159504132231405,
+      "issue_bound_ms_hi": 0.06863801652892562,
+      "sharing": {
+        "invar_101": {
+          "sharing": 128.0,
+          "footprint_kib": 8748.0,
+          "segment": "node"
+        },
+        "ro_w0": {
+          "sharing": 746496.0,
+          "footprint_kib": 192.0,
+          "segment": "none"
+        },
+        "ro_b0": {
+          "sharing": 746496.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 3,
+      "name": "prof_si_medium_g3",
+      "template": "T2",
+      "ops": [
+        "xedge_7"
+      ],
+      "ms": 0.29078400135040283,
+      "terms": 3,
+      "factor_reads": 960,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 320.0,
+      "instr_per_thread": 3,
+      "threads": 83031680,
+      "issue_bound_ms_lo": 0.007445879247015611,
+      "issue_bound_ms_hi": 0.029783516988062444,
+      "sharing": {
+        "gauss_6": {
+          "sharing": 1600.0,
+          "footprint_kib": 64868.5,
+          "segment": "edge"
+        },
+        "emb_dst": {
+          "sharing": 800.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "emb_src": {
+          "sharing": 800.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 40,
+      "name": "prof_si_medium_g40",
+      "template": "T2",
+      "ops": [
+        "conv1_gate_87",
+        "gsig_91"
+      ],
+      "ms": 0.24911999702453613,
+      "terms": 1,
+      "factor_reads": 256,
+      "distinct_reads": 1,
+      "intra_thread_reuse": 256.0,
+      "instr_per_thread": 5,
+      "threads": 66425344,
+      "issue_bound_ms_lo": 0.009927838996020814,
+      "issue_bound_ms_hi": 0.039711355984083256,
+      "sharing": {
+        "conv1_m0_86": {
+          "sharing": 102.4,
+          "footprint_kib": 648685.0,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 11,
+      "name": "prof_si_medium_g11",
+      "template": "T2",
+      "ops": [
+        "cen_19"
+      ],
+      "ms": 0.17190399765968323,
+      "terms": 2,
+      "factor_reads": 257,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 85.66666666666667,
+      "instr_per_thread": 3,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.002978351698806244,
+      "issue_bound_ms_hi": 0.011913406795224976,
+      "sharing": {
+        "rl1_17": {
+          "sharing": 128.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "mean_18": {
+          "sharing": 128.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ones_ec": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 13,
+      "name": "prof_si_medium_g13",
+      "template": "T2",
+      "ops": [
+        "nrm_23",
+        "rln1_24",
+        "rs1_25"
+      ],
+      "ms": 0.17177599668502808,
+      "terms": 3,
+      "factor_reads": 385,
+      "distinct_reads": 4,
+      "intra_thread_reuse": 96.25,
+      "instr_per_thread": 9,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.008935055096418733,
+      "issue_bound_ms_hi": 0.03574022038567493,
+      "sharing": {
+        "cen_19": {
+          "sharing": 128.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "invstd_22": {
+          "sharing": 128.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "rad_g1": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        },
+        "rad_be1": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 8,
+      "name": "prof_si_medium_g8",
+      "template": "T2",
+      "ops": [
+        "nrm_14",
+        "rln0_15",
+        "rs0_16"
+      ],
+      "ms": 0.1703999936580658,
+      "terms": 3,
+      "factor_reads": 385,
+      "distinct_reads": 4,
+      "intra_thread_reuse": 96.25,
+      "instr_per_thread": 9,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.008935055096418733,
+      "issue_bound_ms_hi": 0.03574022038567493,
+      "sharing": {
+        "cen_10": {
+          "sharing": 128.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "invstd_13": {
+          "sharing": 128.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "rad_g0": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        },
+        "rad_be0": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 6,
+      "name": "prof_si_medium_g6",
+      "template": "T2",
+      "ops": [
+        "cen_10"
+      ],
+      "ms": 0.16915200650691986,
+      "terms": 2,
+      "factor_reads": 257,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 85.66666666666667,
+      "instr_per_thread": 3,
+      "threads": 33212672,
+      "issue_bound_ms_lo": 0.002978351698806244,
+      "issue_bound_ms_hi": 0.011913406795224976,
+      "sharing": {
+        "rl0_8": {
+          "sharing": 128.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "mean_9": {
+          "sharing": 128.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ones_ec": {
+          "sharing": 33212672.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 5,
+      "name": "prof_si_medium_g5",
+      "template": "T3",
+      "ops": [
+        "mean_9"
+      ],
+      "ms": 0.07999999821186066,
+      "terms": 128,
+      "factor_reads": 256,
+      "distinct_reads": 256,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 256,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.0019855677992041626,
+      "issue_bound_ms_hi": 0.00794227119681665,
+      "sharing": {
+        "rl0_8": {
+          "sharing": 1.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "ones_ec": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 2,
+      "name": "prof_si_medium_g2",
+      "template": "T1",
+      "ops": [
+        "gdiff_4",
+        "gsq_5",
+        "gauss_6"
+      ],
+      "ms": 0.07760000228881836,
+      "terms": 192,
+      "factor_reads": 192,
+      "distinct_reads": 129,
+      "intra_thread_reuse": 1.4883720930232558,
+      "instr_per_thread": 576,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.004467527548209367,
+      "issue_bound_ms_hi": 0.017870110192837466,
+      "sharing": {
+        "dist_3": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "ones_g": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.25,
+          "segment": "none"
+        },
+        "gauss_offset": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.25,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 10,
+      "name": "prof_si_medium_g10",
+      "template": "T3",
+      "ops": [
+        "mean_18"
+      ],
+      "ms": 0.07612799853086472,
+      "terms": 128,
+      "factor_reads": 256,
+      "distinct_reads": 256,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 256,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.0019855677992041626,
+      "issue_bound_ms_hi": 0.00794227119681665,
+      "sharing": {
+        "rl1_17": {
+          "sharing": 1.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "ones_ec": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 12,
+      "name": "prof_si_medium_g12",
+      "template": "T3",
+      "ops": [
+        "var_20",
+        "vareps_21",
+        "invstd_22"
+      ],
+      "ms": 0.07289600372314453,
+      "terms": 257,
+      "factor_reads": 512,
+      "distinct_reads": 256,
+      "intra_thread_reuse": 2.0,
+      "instr_per_thread": 517,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.004009916219486532,
+      "issue_bound_ms_hi": 0.016039664877946128,
+      "sharing": {
+        "cen_19": {
+          "sharing": 1.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "ones_ec": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 7,
+      "name": "prof_si_medium_g7",
+      "template": "T3",
+      "ops": [
+        "var_11",
+        "vareps_12",
+        "invstd_13"
+      ],
+      "ms": 0.07030399888753891,
+      "terms": 257,
+      "factor_reads": 512,
+      "distinct_reads": 256,
+      "intra_thread_reuse": 2.0,
+      "instr_per_thread": 517,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.004009916219486532,
+      "issue_bound_ms_hi": 0.016039664877946128,
+      "sharing": {
+        "cen_10": {
+          "sharing": 1.0,
+          "footprint_kib": 129737.0,
+          "segment": "edge"
+        },
+        "ones_ec": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 52,
+      "name": "prof_si_medium_g52",
+      "template": "T1",
+      "ops": [
+        "rosl_103"
+      ],
+      "ms": 0.041471999138593674,
+      "terms": 0,
+      "factor_reads": 128,
+      "distinct_reads": 128,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 512,
+      "threads": 5832,
+      "issue_bound_ms_lo": 8.925619834710744e-05,
+      "issue_bound_ms_hi": 0.00035702479338842977,
+      "sharing": {
+        "rol0_102": {
+          "sharing": 1.0,
+          "footprint_kib": 2916.0,
+          "segment": "node"
+        }
+      }
+    },
+    {
+      "group": 54,
+      "name": "prof_si_medium_g54",
+      "template": "T3",
+      "ops": [
+        "E_105"
+      ],
+      "ms": 0.023584000766277313,
+      "terms": 1,
+      "factor_reads": 2,
+      "distinct_reads": 2,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 2,
+      "threads": 1,
+      "issue_bound_ms_lo": 5.978344046525865e-11,
+      "issue_bound_ms_hi": 2.391337618610346e-10,
+      "sharing": {
+        "rol1_104": {
+          "sharing": 0.00017146776406035664,
+          "footprint_kib": 22.78125,
+          "segment": "node"
+        },
+        "unit_m": {
+          "sharing": 1.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 0,
+      "name": "prof_si_medium_g0",
+      "template": "T3",
+      "ops": [
+        "evec_0"
+      ],
+      "ms": 0.021663999184966087,
+      "terms": 9,
+      "factor_reads": 9,
+      "distinct_reads": 6,
+      "intra_thread_reuse": 1.5,
+      "instr_per_thread": 9,
+      "threads": 259474,
+      "issue_bound_ms_lo": 6.980511794077135e-05,
+      "issue_bound_ms_hi": 0.0002792204717630854,
+      "sharing": {
+        "pos": {
+          "sharing": 44.49142661179698,
+          "footprint_kib": 68.34375,
+          "segment": "node"
+        },
+        "shifts": {
+          "sharing": 1.0,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 53,
+      "name": "prof_si_medium_g53",
+      "template": "T3",
+      "ops": [
+        "rol1_104"
+      ],
+      "ms": 0.021183999255299568,
+      "terms": 129,
+      "factor_reads": 257,
+      "distinct_reads": 257,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 257,
+      "threads": 5832,
+      "issue_bound_ms_lo": 4.480242768595042e-05,
+      "issue_bound_ms_hi": 0.00017920971074380167,
+      "sharing": {
+        "rosl_103": {
+          "sharing": 1.0,
+          "footprint_kib": 2916.0,
+          "segment": "node"
+        },
+        "ro_w1": {
+          "sharing": 5832.0,
+          "footprint_kib": 0.5,
+          "segment": "none"
+        },
+        "ro_b1": {
+          "sharing": 5832.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 21,
+      "name": "prof_si_medium_g21",
+      "template": "T1",
+      "ops": [
+        "s2_35",
+        "invr_36",
+        "r_37",
+        "sb1_44",
+        "sb2_45"
+      ],
+      "ms": 0.020927999168634415,
+      "terms": 5,
+      "factor_reads": 6,
+      "distinct_reads": 4,
+      "intra_thread_reuse": 1.5,
+      "instr_per_thread": 14,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.00010858573901897765,
+      "issue_bound_ms_hi": 0.0004343429560759106,
+      "sharing": {
+        "xyz_31": {
+          "sharing": 0.6666666666666666,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "ones": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "u1_38": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 50,
+      "name": "prof_si_medium_g50",
+      "template": "T2",
+      "ops": [
+        "invar_101"
+      ],
+      "ms": 0.019967999309301376,
+      "terms": 9,
+      "factor_reads": 6529,
+      "distinct_reads": 10,
+      "intra_thread_reuse": 652.9,
+      "instr_per_thread": 18,
+      "threads": 2239488,
+      "issue_bound_ms_lo": 0.0012049586776859504,
+      "issue_bound_ms_hi": 0.004819834710743802,
+      "sharing": {
+        "scatter_100": {
+          "sharing": 1152.0,
+          "footprint_kib": 26244.0,
+          "segment": "node"
+        },
+        "unit_m": {
+          "sharing": 2239488.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 18,
+      "name": "prof_si_medium_g18",
+      "template": "T1",
+      "ops": [
+        "xh_32",
+        "sa1_47",
+        "sss_49"
+      ],
+      "ms": 0.019231999292969704,
+      "terms": 3,
+      "factor_reads": 3,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 6,
+      "threads": 259474,
+      "issue_bound_ms_lo": 4.653674529384756e-05,
+      "issue_bound_ms_hi": 0.00018614698117539025,
+      "sharing": {
+        "xyz_31": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "invr_36": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 19,
+      "name": "prof_si_medium_g19",
+      "template": "T1",
+      "ops": [
+        "yh_33",
+        "u1_38",
+        "tc_39",
+        "T2_40",
+        "zero_43"
+      ],
+      "ms": 0.019071999937295914,
+      "terms": 6,
+      "factor_reads": 3,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 8,
+      "threads": 259474,
+      "issue_bound_ms_lo": 6.204899372513008e-05,
+      "issue_bound_ms_hi": 0.00024819597490052033,
+      "sharing": {
+        "xyz_31": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "ones": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 20,
+      "name": "prof_si_medium_g20",
+      "template": "T1",
+      "ops": [
+        "zh_34",
+        "ca1_46",
+        "cc_48",
+        "ca2_50",
+        "sc_51",
+        "cs_52",
+        "sa2_53"
+      ],
+      "ms": 0.01881599985063076,
+      "terms": 9,
+      "factor_reads": 6,
+      "distinct_reads": 5,
+      "intra_thread_reuse": 1.2,
+      "instr_per_thread": 14,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.00010858573901897765,
+      "issue_bound_ms_hi": 0.0004343429560759106,
+      "sharing": {
+        "xyz_31": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        },
+        "invr_36": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "sss_49": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        },
+        "sa1_47": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 22,
+      "name": "prof_si_medium_g22",
+      "template": "T1",
+      "ops": [
+        "cg0_54"
+      ],
+      "ms": 0.018719999119639397,
+      "terms": 1,
+      "factor_reads": 2,
+      "distinct_reads": 2,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 2,
+      "threads": 259474,
+      "issue_bound_ms_lo": 1.551224843128252e-05,
+      "issue_bound_ms_hi": 6.204899372513008e-05,
+      "sharing": {
+        "cos_g": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 1,
+      "name": "prof_si_medium_g1",
+      "template": "T1",
+      "ops": [
+        "r2_1",
+        "invd_2",
+        "dist_3",
+        "dsc_96",
+        "env_97"
+      ],
+      "ms": 0.01852799952030182,
+      "terms": 5,
+      "factor_reads": 6,
+      "distinct_reads": 3,
+      "intra_thread_reuse": 2.0,
+      "instr_per_thread": 17,
+      "threads": 259474,
+      "issue_bound_ms_lo": 0.00013185411166590142,
+      "issue_bound_ms_hi": 0.0005274164466636057,
+      "sharing": {
+        "evec_0": {
+          "sharing": 1.0,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 24,
+      "name": "prof_si_medium_g24",
+      "template": "T1",
+      "ops": [
+        "cg2_56"
+      ],
+      "ms": 0.018079999834299088,
+      "terms": 1,
+      "factor_reads": 2,
+      "distinct_reads": 2,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 2,
+      "threads": 259474,
+      "issue_bound_ms_lo": 1.551224843128252e-05,
+      "issue_bound_ms_hi": 6.204899372513008e-05,
+      "sharing": {
+        "cos_g": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 27,
+      "name": "prof_si_medium_g27",
+      "template": "T1",
+      "ops": [
+        "sg2_59"
+      ],
+      "ms": 0.018015999346971512,
+      "terms": 1,
+      "factor_reads": 2,
+      "distinct_reads": 2,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 2,
+      "threads": 259474,
+      "issue_bound_ms_lo": 1.551224843128252e-05,
+      "issue_bound_ms_hi": 6.204899372513008e-05,
+      "sharing": {
+        "sin_g": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 23,
+      "name": "prof_si_medium_g23",
+      "template": "T1",
+      "ops": [
+        "cg1_55"
+      ],
+      "ms": 0.017983999103307724,
+      "terms": 1,
+      "factor_reads": 2,
+      "distinct_reads": 2,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 2,
+      "threads": 259474,
+      "issue_bound_ms_lo": 1.551224843128252e-05,
+      "issue_bound_ms_hi": 6.204899372513008e-05,
+      "sharing": {
+        "cos_g": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 25,
+      "name": "prof_si_medium_g25",
+      "template": "T1",
+      "ops": [
+        "sg0_57"
+      ],
+      "ms": 0.017952000722289085,
+      "terms": 1,
+      "factor_reads": 2,
+      "distinct_reads": 2,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 2,
+      "threads": 259474,
+      "issue_bound_ms_lo": 1.551224843128252e-05,
+      "issue_bound_ms_hi": 6.204899372513008e-05,
+      "sharing": {
+        "sin_g": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    },
+    {
+      "group": 17,
+      "name": "prof_si_medium_g17",
+      "template": "T1",
+      "ops": [
+        "xyz_31"
+      ],
+      "ms": 0.01775999926030636,
+      "terms": 3,
+      "factor_reads": 6,
+      "distinct_reads": 4,
+      "intra_thread_reuse": 1.5,
+      "instr_per_thread": 6,
+      "threads": 259474,
+      "issue_bound_ms_lo": 4.653674529384756e-05,
+      "issue_bound_ms_hi": 0.00018614698117539025,
+      "sharing": {
+        "evec_0": {
+          "sharing": 1.0,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "invd_2": {
+          "sharing": 1.0,
+          "footprint_kib": 1013.5703125,
+          "segment": "edge"
+        }
+      }
+    },
+    {
+      "group": 26,
+      "name": "prof_si_medium_g26",
+      "template": "T1",
+      "ops": [
+        "sg1_58"
+      ],
+      "ms": 0.016992000862956047,
+      "terms": 1,
+      "factor_reads": 2,
+      "distinct_reads": 2,
+      "intra_thread_reuse": 1.0,
+      "instr_per_thread": 2,
+      "threads": 259474,
+      "issue_bound_ms_lo": 1.551224843128252e-05,
+      "issue_bound_ms_hi": 6.204899372513008e-05,
+      "sharing": {
+        "sin_g": {
+          "sharing": 0.3333333333333333,
+          "footprint_kib": 3040.7109375,
+          "segment": "edge"
+        },
+        "unit": {
+          "sharing": 259474.0,
+          "footprint_kib": 0.00390625,
+          "segment": "none"
+        }
+      }
+    }
+  ]
+}

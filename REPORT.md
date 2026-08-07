@@ -1252,6 +1252,37 @@ configuration, not the pinned N = 5 multi-allocation protocol. Justified by the 
 multi-allocation protocol resumes for any verdict-class table (D41). All results carry
 `provenance: salloc-compute-node` and `host: nid005562`.
 
+### 8.5g Where the S1c time goes
+
+Per-kernel breakdown of the composed forward (si_medium fp32, 55 kernels, 1392 ms). **[measurement]**
+
+| template | kernels | ms | share |
+|---|---|---|---|
+| T2 | 24 | **1376.62** | **98.9 %** |
+| T3 | 9 | 12.51 | 0.9 % |
+| T1 | 22 | 3.20 | **0.2 %** |
+
+Three kernels — `conv1_90` (714.8 ms), `conv2_95` (344.7), `conv1_m0_86` (190.5) — are **89.8 %**
+of the forward. All are the SO(2) convolution; all are T2.
+
+**The occupancy diagnosis (§8.5f, D39) is refuted a second time and more sharply.** The T1 kernels
+at 3.5 % occupancy that I identified as the problem are 0.2 % of runtime: making them infinitely
+fast changes nothing. The cost is in T2, the template that is *saturated*.
+
+Of four hypotheses, three die on measurement — occupancy (above), issue-bound (measured is 18–70×
+the issue floor), and register spilling (~113 live scalars against 255 registers). The survivor:
+
+**Uncoalesced weight access. [static analysis, consistent with measurement]** `c1_w1a` is
+`none[j:2, o:128, k:2, c:256]` and T2 puts the thread index on `o`, so consecutive threads read
+2 048 B apart and every warp load touches 32 distinct cache lines. 33.2 M threads × 10 246
+instructions → 5.32e9 warp loads → 20 ms coalesced → **×32 = 651 ms uncoalesced**, against
+**714.8 ms measured**. Nine percent apart with no fitted parameter, and no rival hypothesis within
+an order of magnitude.
+
+That makes the S1 wall-clock deficit a *layout and staging* problem in one template, not a
+property of the fused approach — which is a considerably better position than the headline
+0.036× suggests, and is the subject of the next intervention.
+
 ### 8.6 Standing threads
 
 | thread | status |
