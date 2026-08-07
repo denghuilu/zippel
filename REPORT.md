@@ -6,15 +6,17 @@ and three-pass (fwd/bwd/dbwd) joint compilation on that IR stably outperforms ex
 per-operator stacks (eager / torch.compile / cuEquivariance + autograd) on conservative training —
 wall-clock and peak memory.
 
-**Status: Phase 1 complete — Gate 1 pending review (§8).** Gate 0 passed with its review
-conditions closed (§6). Every number below is measured; nothing is projected, and no baseline is
-reported at a setting that cripples it.
+**Status: Gate 0 and Gate 1 both PASSED.** Phase 2 (CuTe DSL fused kernels) is next. Every number
+below is measured; nothing is projected, and no baseline is reported at a setting that cripples
+it.
 
 The IR is called the **segmented-polynomial IR** throughout; the package is `zippel`. "SPIR"
 appears only where this document quotes the original work order.
 
-**All login-node timings are PROVISIONAL** and are replaced by `sbatch slurm/bench.sbatch` on an
-exclusive node, which also records NVML clocks. Units are **GiB** (2³⁰) throughout.
+Benchmark numbers come from **exclusive `sbatch` allocations**, never the shared login node;
+every measurement records `host`, `slurm_job` and `exclusive`. Units are **GiB** (2³⁰) throughout.
+The small fixtures are host-dispatch-bound and are reported as a range rather than a number
+(§5); si_medium is the primary fixture.
 
 Two of the three per-operator baselines resolved as *structural findings* rather than numbers, and
 both were traced to a specific cause rather than left as "it didn't work":
@@ -356,6 +358,62 @@ fixtures), job 4376140:
 | cu_large | 48 668 | 3 796 130 | **OOM** | OOM | OOM | — | — |
 
 IQR ≤ 2.28 ms on every medium row (≤ 1.0 %); 9.9–18.5 ms on the small rows (16–39 %).
+
+### Variance diagnosis: why si_small is unreproducible
+
+Two exclusive allocations of the identical configuration differed by 80 % on si_small fp32
+(29.79 ms IQR 0.23 on `nid006330`, job 4376123; 53.67 ms IQR 15.96 on `nid005332`, job 4376140).
+Provenance from both runs rules out the obvious explanations and points at one:
+
+| | job 4376123 | job 4376140 |
+|---|---|---|
+| node | nid006330 | nid005332 |
+| GPU / driver | GH200 120GB, 590.48.01 | identical |
+| max SM clock / power cap | 1980 MHz / 900 W | identical |
+| allocated CPUs, exclusivity | 288, exclusive | identical |
+| CPU/NUMA pinning | **none** | **none** |
+
+**The clock–variance correlation is inverted, and that is the diagnostic.** Per-measurement NVML
+clocks in job 4376140:
+
+| fixture | SM clock at measurement | IQR |
+|---|---|---|
+| si_small / cu_small | **1980 MHz — maximum boost** | 16–39 % |
+| si_medium / cu_medium | 1785–1965 MHz | 0.2–1.0 % |
+
+The *noisy* configurations run at full boost; the *stable* ones downclock. A GPU that is
+genuinely working draws power and drops off max boost — so sitting pinned at 1980 MHz while
+producing 30 % variance says the GPU is idle, waiting. The medium fixtures, which actually load
+the device, are 100× tighter.
+
+**Suspected dominant source: unpinned CPU/NUMA placement relative to the driving GPU.** A GH200
+node presents 4 GPUs across 4 NUMA domains. Neither run pinned the process, so it could land on a
+socket that is not local to GPU 0, and for a workload issuing ~3 500 launches in 30–55 ms
+(~10 µs each, i.e. dispatch-bound) every launch then crosses the interconnect. That is a
+plausible mechanism for an 80 % swing in exactly the configurations where host dispatch dominates
+and for no swing where the device dominates. It is a *hypothesis consistent with all the
+provenance we have*, not yet a confirmed cause — `numactl` was not used in either run, so
+placement was never recorded, only inferred.
+
+### Verdict-table protocol (binding from here)
+
+Any number that enters a verdict table is produced by `slurm/verdict.sbatch` +
+`bench/aggregate_verdict.py`, which enforce:
+
+* **N = 5 independent allocations**, as a SLURM array — not 5 repeats inside one allocation.
+  Repeats within an allocation cannot observe between-node and between-placement variance, which
+  the above identifies as the dominant term.
+* **Median-of-medians** as the central value, and the **full range** across allocations as the
+  error bar. The within-allocation IQR is reported alongside but is never the headline: it is the
+  smaller, more flattering number and it hides precisely the variance that matters.
+* **Host pinning** via `numactl --cpunodebind=0 --membind=0` (available at `/usr/bin/numactl`),
+  with the placement echoed into the job log so it is auditable rather than assumed.
+
+**Host jitter is a measurement target, not noise to be averaged away.** The spread across
+allocations is reported per configuration; where it greatly exceeds the in-allocation IQR, the
+dominant variance is between allocations and the configuration is dispatch-bound. That is
+diagnostic information about *what the workload is*, and it is the same axis Phase 2's fusion is
+meant to attack — so it is reported, not smoothed.
 
 ### Secondary metric: max batch (GiB budgets)
 
@@ -761,16 +819,27 @@ only), or multi-GPU.
 
 eSEN-sm (K4L2), FP32 sizing for peak-live bytes, no rematerialization and no fusion:
 
-| program | ops pre-CSE | ops post-CSE | paths | distinct contraction signatures | kernel families | peak live GiB (si_small) | peak live GiB (si_medium) |
-|---|---|---|---|---|---|---|---|
-| fwd | 106 | 101 | 193 | 48 | 45 | 0.23 | 6.03 |
-| force | 407 | 290 | 486 | 145 | 136 | 0.77 | 20.73 |
-| dbwd | 1221 | 903 | 1467 | 379 | 352 | 2.12 | 57.32 |
+| program | ops pre-CSE | post-CSE | paths | signatures | families | **archetypes** | **fusion groups** | peak GiB (si_small) | peak GiB (si_medium) |
+|---|---|---|---|---|---|---|---|---|---|
+| fwd | 106 | 101 | 193 | 48 | 45 | **35** | **42** | 0.23 | 6.03 |
+| force | 407 | 290 | 486 | 145 | 136 | **78** | **46** | 0.77 | 20.73 |
+| dbwd | 1221 | 903 | 1467 | 379 | 352 | **149** | **107** | 2.12 | 57.32 |
 
-*Signatures* count ops that differ only in which buffers they point at as one — an upper bound
-on kernels Phase 2 must write. *Kernel families* additionally abstract slice **offsets**, keeping
-extents — the corresponding lower bound. Neither is a timing; the interpreter is an oracle, and
-no number here belongs in a performance table.
+Four progressively coarser groupings of the same ops, because they answer different questions:
+
+* **signatures** — ops differing only in which buffers they point at count once;
+* **families** — additionally abstract slice *offsets*, keeping extents;
+* **archetypes** — what an **emitter** must know how to write. A generated kernel takes its
+  coefficient and slice tables as runtime data and its extents as parameters; what it *cannot*
+  take at runtime is its shape of computation — which operands are gathered, whether the result
+  is scattered, and the contraction pattern up to index renaming. Path *count* is dropped too,
+  since a kernel loops over a path table;
+* **fusion groups** — kernel *launches* left after a cheap greedy producer–consumer fusion pass
+  (fusable = consumer reads producer, same segment axis, matching trailing extents, no gather or
+  scatter on the consumer).
+
+Neither is a timing; the interpreter is an oracle, and no number here belongs in a performance
+table.
 
 ### 8.2 Reading it
 
@@ -782,14 +851,19 @@ of ops (1221 → 903) where it removed only 5 % on the forward, because the two 
 regenerate the same intermediates. The vocabulary holds throughout: every derived program passes
 `assert_closed`, and the derivatives are exact against three independent legs (§8.3).
 
-**The absolute signature count is the problem, and it is a Phase 2 design constraint rather than
-a Phase 1 failure.** 379 signatures — 352 even after abstracting slice offsets — is far too many
-to hand-write one kernel apiece within M1's budget. That the two numbers are close is the
-informative part: the diversity is **not** slice offsets (which a kernel can take as runtime
-arguments) but genuine structural variety in extents and path shape, produced by the per-`m` and
-per-`l` block decomposition. So the lever for Phase 2 is extent-parameterised kernels that treat
-the per-m convolutions and the per-l Wigner blocks as one family each, not offset
-parameterisation. On memory, the 57.32 GiB unscheduled peak at si_medium is **not** directly
+**The right unit is the emitter, not the kernel.** An earlier draft of this section read the 352
+as "far too many kernels to hand-write", which was the wrong frame: the compiler emits kernels,
+humans write emitters. Counting what an emitter must actually handle gives **149 archetypes** for
+dbwd, and a cheap greedy fusion pass leaves **107 launches**. Both are tractable for hand-guided
+Phase 2 emission in a way that 352 is not, and the collapse from 352 → 149 is exactly the VJP's
+doing: the transposes are structurally identical to one another and differ only in extents and
+slice tables, which is what the closure lemma predicts.
+
+For scale, eager issues roughly 3 500 CUDA kernels for one si_small training step (§5). The
+107 figure is not directly comparable — profiler-counted kernels include ones a single `aten` op
+expands into, and 107 is an unscheduled estimate rather than a measurement — but the order of
+magnitude is the point, and it is the launch-bound axis that the small-fixture variance
+independently implicates. On memory, the 57.32 GiB unscheduled peak at si_medium is **not** directly
 comparable to eager's measured 38.13 GiB: our liveness model sums every live buffer with no
 allocator reuse, while `max_memory_allocated` benefits from reuse of freed blocks. The honest
 reading is that it is a pessimistic upper bound on the unscheduled program, and that Phase 2's

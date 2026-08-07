@@ -135,5 +135,87 @@ def kernel_families(prog: Program) -> dict[tuple, int]:
     return out
 
 
-__all__ = ["cse", "dce", "simplify", "op_counts", "signatures", "contraction_signatures",
-           "kernel_families"]
+
+
+def _canonical_subscripts(subscripts: str) -> str:
+    """Rename indices in order of first appearance, so `"ij,jc->ic"` and `"ab,bd->ad"` agree."""
+    mapping: dict[str, str] = {}
+    out = []
+    for ch in subscripts:
+        if ch in ",->":
+            out.append(ch)
+            continue
+        if ch not in mapping:
+            mapping[ch] = chr(ord("a") + len(mapping))
+        out.append(mapping[ch])
+    return "".join(out)
+
+
+def archetypes(prog: Program) -> dict[tuple, int]:
+    """Coarsest useful grouping: what an *emitter* has to know how to write.
+
+    A generated kernel takes its coefficient and slice tables as runtime data, and its
+    extents as parameters. What it cannot take at runtime is its *shape of computation*:
+    which operands are gathered, whether the result is scattered, and the contraction
+    pattern up to index renaming. That is the archetype.
+
+    So: extents dropped, path coefficients and slices dropped, path *count* dropped (a
+    kernel loops over a path table), and subscripts canonicalised by renaming indices in
+    order of first appearance. What remains is the set of distinct contraction patterns the
+    emitter must handle -- the number a human actually writes code for.
+    """
+    out: dict[tuple, int] = {}
+    for op in prog.ops.values():
+        if op.kind == "scalar_map":
+            key = ("scalar_map", op.fn)
+        else:
+            key = ("segmented_contraction",
+                   op.out_type.segment,
+                   tuple(m is not None for m in op.index_maps),
+                   op.out_index_map is not None,
+                   tuple(sorted({_canonical_subscripts(p.subscripts) for p in op.paths})))
+        out[key] = out.get(key, 0) + 1
+    return out
+
+
+def fusion_groups(prog: Program) -> list[list[str]]:
+    """Greedy producer-consumer fusion partition.
+
+    Fusable means: the consumer reads the producer's output, both live on the same segment
+    axis, their trailing extents match (so one loop nest covers both), and the consumer does
+    no gather or scatter (an index map re-maps the segment axis, which breaks the shared
+    loop). A `scalar_map` is always fusable into its producer under those conditions.
+
+    Deliberately cheap and greedy: this is a Phase 2 *planning* estimate of how many kernel
+    launches a straightforward fusion pass would leave, not a scheduling decision.
+    """
+    def fusable(prod_name: str, cons: "Op") -> bool:
+        prod = prog.ops.get(prod_name)
+        if prod is None:
+            return False
+        if any(m is not None for m in cons.index_maps) or cons.out_index_map is not None:
+            return False
+        if prod.out_type.segment != cons.out_type.segment:
+            return False
+        return prod.out_type.sizes == cons.out_type.sizes
+
+    group_of: dict[str, int] = {}
+    groups: list[list[str]] = []
+    for name in prog.topo():
+        op = prog.ops[name]
+        target = None
+        for src in op.inputs:
+            if src in group_of and fusable(src, op):
+                target = group_of[src]
+                break
+        if target is None:
+            groups.append([name])
+            group_of[name] = len(groups) - 1
+        else:
+            groups[target].append(name)
+            group_of[name] = target
+    return groups
+
+
+__all__ = ["cse", "dce", "simplify", "op_counts", "signatures",
+           "contraction_signatures", "kernel_families", "archetypes", "fusion_groups"]

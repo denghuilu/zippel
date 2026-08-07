@@ -2,9 +2,13 @@
 
 Two numbers decide whether Phase 2's hand scheduling is tractable:
 
-  * **distinct contraction signatures** -- the kernel-count proxy. Ops sharing a signature
-    differ only in which buffers they point at, so one generated kernel serves all of them.
-    This is an upper bound on how many kernels have to be written by hand.
+  * **archetypes** -- what an *emitter* must know how to write. A generated kernel takes its
+    coefficient and slice tables as runtime data and its extents as parameters; what it cannot
+    take at runtime is its shape of computation. Signatures and families are progressively
+    looser upper bounds on the same thing; the archetype count is the one a human writes code
+    against, because the compiler emits kernels and humans write emitters.
+  * **fusion groups** -- kernel *launches* left after a cheap greedy producer-consumer fusion
+    pass. This is the launch-count estimate for Phase 2 planning.
   * **peak live bytes** under a naive topological order, with no rematerialization and no
     fusion. This is the *unscheduled* memory baseline that Phase 2's joint scheduling has to
     beat, so it is deliberately measured without any of the tricks Phase 2 will use.
@@ -28,8 +32,8 @@ from blocks.eso2_ir import build_dbwd, build_force, build_forward
 from blocks.eso2_ref import ANCHOR_CONFIG_LMAX4, BlockConfig
 from fixtures.load import fixture_stats
 from zippel.interp import peak_live_bytes
-from zippel.simplify import (contraction_signatures, kernel_families, op_counts,
-                             signatures, simplify)
+from zippel.simplify import (archetypes, contraction_signatures, fusion_groups,
+                             kernel_families, op_counts, signatures, simplify)
 from zippel.vjp import assert_closed
 
 GIB = 1024 ** 3
@@ -55,6 +59,8 @@ def collect(cfg: BlockConfig, shapes: dict[str, dict]) -> list[dict]:
             "contraction_signatures": len(contraction_signatures(simp)),
             "all_signatures": len(signatures(simp)),
             "kernel_families": len(kernel_families(simp)),
+            "archetypes": len(archetypes(simp)),
+            "fusion_groups": len(fusion_groups(simp)),
             "scalar_fns": sorted({o.fn for o in simp.ops.values() if o.kind == "scalar_map"}),
             "peak_live_gib": {},
         }
@@ -66,12 +72,13 @@ def collect(cfg: BlockConfig, shapes: dict[str, dict]) -> list[dict]:
 
 def markdown(rows: list[dict], shapes: dict[str, dict]) -> str:
     heads = " | ".join(f"peak live GiB ({s})" for s in shapes)
-    out = [f"| program | ops pre-CSE | ops post-CSE | paths | distinct contraction signatures | kernel families | {heads} |",
-           "|---|---|---|---|---|---|" + "---|" * len(shapes)]
+    out = [f"| program | ops pre-CSE | ops post-CSE | paths | signatures | families | archetypes | fusion groups | {heads} |",
+           "|---|---|---|---|---|---|---|---|" + "---|" * len(shapes)]
     for r in rows:
         peaks = " | ".join(f"{r['peak_live_gib'][s]:.2f}" for s in shapes)
         out.append(f"| {r['program']} | {r['ops_pre_cse']} | {r['ops_post_cse']} | "
-                   f"{r['paths']} | {r['contraction_signatures']} | {r['kernel_families']} | {peaks} |")
+                   f"{r['paths']} | {r['contraction_signatures']} | {r['kernel_families']} | "
+                   f"{r['archetypes']} | {r['fusion_groups']} | {peaks} |")
     return "\n".join(out)
 
 

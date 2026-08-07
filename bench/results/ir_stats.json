@@ -23,6 +23,8 @@
       "contraction_signatures": 48,
       "all_signatures": 55,
       "kernel_families": 45,
+      "archetypes": 35,
+      "fusion_groups": 42,
       "scalar_fns": [
         "exp",
         "poly_envelope",
@@ -45,6 +47,8 @@
       "contraction_signatures": 145,
       "all_signatures": 157,
       "kernel_families": 136,
+      "archetypes": 78,
+      "fusion_groups": 46,
       "scalar_fns": [
         "exp",
         "poly_envelope",
@@ -68,6 +72,8 @@
       "contraction_signatures": 379,
       "all_signatures": 392,
       "kernel_families": 352,
+      "archetypes": 149,
+      "fusion_groups": 107,
       "scalar_fns": [
         "exp",
         "poly_envelope",
