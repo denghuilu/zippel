@@ -954,3 +954,40 @@ rewritten to match the new one. That is what let the same function both certify 
 and continue to report the unfixed emitter as over budget — i.e. the evidence that the defect was
 real survives the fix. A bound silently updated to match new behaviour cannot do that, and the
 temptation to update it is strongest exactly when it has just fired.
+
+## 2026-08-07 — D46: interpretation rules for the conv1_90 factorial, fixed before any number exists.
+
+Three arms on `conv1_90` (51.3 % of the forward): **A** transpose the weight layout so the
+thread-mapped axis is innermost; **B** cooperative coalesced staging into shared memory; **AB**
+both. si_medium only — the si_small regime check belongs with the post-adoption composition
+re-measure, so the arms are compared at one problem size.
+
+**What B is, stated before measuring, because it changes what a null from B means.** Each thread
+reads a *disjoint* slice of the weight — thread `c` touches only `o = c` — so there is no
+intra-block reuse to capture. The 259 474x sharing from 3(a) is entirely **cross-CTA**, and
+shared memory cannot capture cross-CTA reuse. B therefore does not amortise re-reads here; it
+fixes coalescing by a different route, paying the scatter in smem instead of in global.
+
+**The rules, and what each implies for T2's default emission:**
+
+| outcome | signature | consequence |
+|---|---|---|
+| coalescing-dominant | `dA` large, `dB ≈ dA`, `dAB ≈ dA` | T2's rule gains a **layout requirement**: a group's thread-mapped axis must be innermost in every operand, enforced by permuting operand and handle together. Transpose preferred over smem — no capacity limit, no barrier, works on operands too large to stage. |
+| sharing-dominant | `dB >> dA` | Contradicts the disjoint-slice analysis, so something re-reads within a block. The 3(a) access model is wrong and gets rebuilt **before** it guides anything; no emission rule changes until then. |
+| superadditive | `dAB >> dA·dB` | Not redundant: transpose makes the cooperative load itself coalesced. Both enter the rule, ordered — layout first, staging second and conditional on capacity. |
+| all-null | none clears measurement spread | **D42 is refuted despite predicting the magnitude.** The 651-vs-715 agreement was coincidence, the diagnosis reopens, and the next instrument is a real profiler (uenv `ncu`, REPORT 8.9) rather than more static analysis. Written first because it is the outcome that costs most to accept. |
+
+Correctness is checked against the FP64 interpreter on every arm using the bound the emitter
+ships. **An arm that is fast and wrong is not a result.**
+
+## 2026-08-07 — D47: D41's expiry clause is armed.
+
+D41 licensed a single-node `salloc` measurement because the within-node spread (0.04–0.65 %) was
+orders below the effect (10–28x). That licence carries its own expiry: **if the post-adoption
+composition measurement lands within 3x of any comparator, the condition that justified it no
+longer holds and the re-measure runs under the pinned N = 5 multi-allocation protocol.** Near a
+crossover, placement variance is no longer negligible against the effect — which is precisely
+when a single-node number would mislead.
+
+Armed now rather than after the fact, so the trigger is not evaluated by someone who already
+knows the answer.

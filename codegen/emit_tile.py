@@ -38,14 +38,29 @@ def _sym(buf: str, idx: tuple) -> str:
     return f"v_{buf}" + "".join(("_c" if isinstance(i, Ch) else f"_{i}") for i in idx)
 
 
-def _ref(prog: Program, buf: str, idx: tuple) -> str:
+def _ref(prog: Program, buf: str, idx: tuple, transpose: dict | None = None) -> str:
+    """A memory reference. `transpose[buf]` permutes the trailing axes of the reference.
+
+    The permutation is a *layout* change, applied identically to the emitted index order and to
+    the tensor handed in at launch, so the kernel computes the same thing from the same values.
+    Its point is stride: with the thread-mapped axis buried, consecutive threads read addresses
+    2 048 B apart and every warp load touches 32 cache lines (D42). Moving that axis last makes
+    the same reads contiguous.
+    """
     t = prog.type_of(buf)
     lead = "e" if t.segment != "none" else "0"
-    coords = [lead] + [(_ch_expr(i) if isinstance(i, Ch) else str(i)) for i in idx]
+    perm = (transpose or {}).get(buf)
+    order = idx if perm is None else tuple(idx[k] for k in perm)
+    coords = [lead] + [(_ch_expr(i) if isinstance(i, Ch) else str(i)) for i in order]
     return f"m_{buf}[{', '.join(coords)}]"
 
 
-def _factor(prog: Program, buf: str, idx: tuple, from_smem: bool, live_in: set) -> str:
+def _factor(prog: Program, buf: str, idx: tuple, from_smem: bool, live_in: set,
+            transpose: dict | None = None, staged: set | None = None) -> str:
+    if staged and buf in staged:
+        # staged operands live in smem, indexed by the thread's own slice
+        flat = [i for i in idx if not isinstance(i, Ch)]
+        return f"sh_{buf}[{' + '.join(['c'] + [str(i) for i in flat]) if flat else 'c'}]"
     if from_smem:
         # a cross-channel read has a literal channel coordinate; that is the smem index
         chan = [i for i in idx if not isinstance(i, Ch)]
@@ -55,12 +70,14 @@ def _factor(prog: Program, buf: str, idx: tuple, from_smem: bool, live_in: set) 
         # valid: `xedge_7` concatenates three operands, and thread c<64 reading `emb_src[e,c-64]`
         # is an out-of-bounds negative index. Inlining puts every load inside the branch that
         # guarantees its range; NVRTC re-materialises common subexpressions within a block.
-        return _ref(prog, buf, idx)
+        return _ref(prog, buf, idx, transpose)
     return _sym(buf, idx)
 
 
 def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
-                     budget: int = REGISTER_BUDGET) -> str:
+                     budget: int = REGISTER_BUDGET,
+                     transpose: dict | None = None,
+                     stage_shared: tuple = ()) -> str:
     spec = sched.spec
     dt = DTYPE[dtype]
     C = sched.extent
@@ -88,13 +105,15 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
         target = _sym(a.target, a.index)
         if a.fn is not None:
             src = a.source
-            arg = _ref(prog, *src) if src[0] in live_in else _sym(*src)
+            arg = (_ref(prog, src[0], src[1], transpose) if src[0] in live_in
+                   else _sym(*src))
             return [f"{target} = {_scalar(a.fn, arg, dt)}"]
         if not a.terms:
             return [f"{target} = {dt}(0.0)"]
         parts = []
         for t in a.terms:
-            fs = " * ".join(_factor(prog, b, ix, sm, live_in) for b, ix, sm in t.factors)
+            fs = " * ".join(_factor(prog, b, ix, sm, live_in, transpose, set(stage_shared))
+                            for b, ix, sm in t.factors)
             parts.append(fs if t.coeff == 1.0 else
                          (f"-({fs})" if t.coeff == -1.0 else f"{dt}({t.coeff!r}) * {fs}"))
         return _chunked_sum(target, parts, uid)
@@ -155,7 +174,7 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
         ranges = [(CH,) if k == sched.axis else range(s) for k, s in enumerate(t.sizes)]
         for idx in itertools.product(*ranges):
             idx = tuple(idx)
-            body.append(f"{_ref(prog, buf, idx)} = {_sym(buf, idx)}")
+            body.append(f"{_ref(prog, buf, idx)} = {_sym(buf, idx)}")  # outputs never transposed
 
     smem_decls = "\n".join(
         f"        s_{b} = smem.allocate_tensor({dt}, cute.make_layout({C}), 16)"
