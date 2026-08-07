@@ -27,3 +27,5 @@ confirming the original reasoning if the two had not been separated.
 | `cueq-indexed-linear-trigger.md` | stands — upstream, DRAFT issue awaiting review |
 | `cueq-math-dtype.md` | **REFUTED** — my Gate 0 claim, disproved by controlled experiment |
 | `dense-mma-density-argument.md` | **MECHANISM CORRECTED** — D22 upheld, its stated cause replaced (D24) |
+| `traffic-model-calibration.md` | stands — what the traffic model predicts, and what it does not |
+| `dcgm-bandwidth-constant.md` | **MECHANISM CORRECTED** — the fit stays in service; it is not a bandwidth |

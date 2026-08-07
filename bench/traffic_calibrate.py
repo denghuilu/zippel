@@ -4,16 +4,18 @@ The work order asks for ncu-measured DRAM traffic. **`ncu` is not installed on t
 neither is CUPTI** -- see REPORT.md. The substitute is DCGM's `dram_active` hardware counter
 (field 1005), the fraction of cycles the memory interface is transferring, which yields
 
-    bytes  ~=  dram_active  x  peak_bandwidth  x  elapsed
+    bytes  ~=  dram_active  x  K  x  elapsed
 
 That is coarser than ncu's exact byte counters, so the method is itself calibrated first, against
 a workload whose traffic is known by construction. Two stages:
 
   stage 1  instrument calibration. `torch.Tensor.copy_` of N bytes moves exactly 2N (one read,
-           one write). Run it at several sizes and *fit* the effective bandwidth, because the
-           raw counter against nameplate peak reads a consistent ~15 % low -- a systematic bias,
-           which is what a calibration constant is for. The residual after the fit is how much
-           the instrument can be trusted.
+           one write). Run it at several sizes and fit **K, an effective instrument constant**
+           = achieved bandwidth / instrument response. K is deliberately NOT called a bandwidth:
+           the fitted 4.777e12 exceeds both this device's nominal 4.0 TB/s peak and its measured
+           3.6 TB/s achieved rate, so it cannot be one -- it absorbs DCGM's under-reporting of
+           the busy fraction (findings/dcgm-bandwidth-constant.md). The residual after the fit
+           measures the instrument's linearity, and nothing about what K is made of.
   stage 2  model check. Run each emitted kernel back-to-back, derive its DRAM bytes with the
            fitted bandwidth, and compare against `codegen.traffic.estimate`.
 
@@ -36,9 +38,11 @@ import torch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-#: GH200 HBM3e theoretical peak. `dram_active` is a duty cycle against this, not against the
-#: achievable copy rate, so the theoretical figure is the right multiplier.
-PEAK_BW_BYTES = 4.0e12
+from zippel.ir import IndexType  # noqa: E402
+
+#: Starting guess for the fit only -- the nominal peak of this device (GH200 96GB, HBM3).
+#: The fitted constant that replaces it is NOT a bandwidth; see findings/dcgm-bandwidth-constant.md.
+NOMINAL_PEAK_BYTES = 4.0e12
 
 
 def dcgm_sample(fn, gpu: int = 0, seconds: float = 3.0, interval_ms: int = 100,
@@ -84,7 +88,7 @@ def dcgm_sample(fn, gpu: int = 0, seconds: float = 3.0, interval_ms: int = 100,
 
 
 def measured_bytes(active: float, elapsed: float, iters: int) -> float:
-    return active * PEAK_BW_BYTES * elapsed / max(iters, 1)
+    return active * NOMINAL_PEAK_BYTES * elapsed / max(iters, 1)
 
 
 def stage1_fit_bandwidth(rows: list, gpu: int) -> float | None:
@@ -118,27 +122,56 @@ def stage1_fit_bandwidth(rows: list, gpu: int) -> float | None:
         return None
     fits.sort()
     bw = fits[len(fits) // 2]
-    print(f"\nfitted effective bandwidth: {bw/1e12:.3f} TB/s "
-          f"(nameplate {PEAK_BW_BYTES/1e12:.1f})")
+    print(f"\nfitted effective constant K = {bw/1e12:.3f}e12 -- NOT a bandwidth "
+          f"(device nominal peak {NOMINAL_PEAK_BYTES/1e12:.1f} TB/s, measured achieved ~3.6)")
     print(f"{'case':>16} {'residual after fit':>20}")
     for r in rows:
         if r["stage"] != "instrument":
             continue
-        corrected = r["raw_bytes"] * bw / PEAK_BW_BYTES
+        corrected = r["raw_bytes"] * bw / NOMINAL_PEAK_BYTES
         r["rel_error"] = (corrected - r["known_bytes"]) / r["known_bytes"]
         print(f"{r['case']:>16} {r['rel_error']:>19.1%}")
     return bw
 
 
+def _fixture_index_maps(fixture: str, prog, sizes) -> dict:
+    """Index buffers taken from the real neighbour list (D29).
+
+    Only the connectivity is loaded -- the fixture's float tensors are not needed, so this stays
+    cheap even at si_medium where the FP64 interpreter does not fit.
+    """
+    from fixtures.load import load_batch
+
+    batch = load_batch(fixture, "cpu", torch.float64, None, requires_grad=False)
+    edge_index = batch["edge_index"].to("cuda")
+    out = {}
+    for name, t in prog.inputs.items():
+        if not isinstance(t, IndexType):
+            continue
+        if t.segment == "edge" and "src" in name:
+            out[name] = edge_index[0].contiguous()
+        elif t.segment == "edge":
+            out[name] = edge_index[1].contiguous()
+    return out
+
+
 def _build_forward_env(fixture: str):
     """The emitted kernels, compiled against synthetic inputs of the right shapes.
 
-    Inputs are synthesized from the IR buffer types rather than produced by running the FP64
-    interpreter. Two reasons, and the first is the honest one: the full FP64 forward at
-    si_medium materialises ~40 GiB of intermediates and was killed by the OOM killer. The
-    second is that it is unnecessary -- **DRAM traffic depends on shapes and access patterns,
-    not on values**, and none of these kernels branch on data. Correctness is established
-    separately, on si_small, against the real interpreter (tests/test_codegen.py).
+    Floating-point inputs are synthesized from the IR buffer types rather than produced by
+    running the FP64 interpreter: the full FP64 forward at si_medium materialises ~40 GiB and
+    was OOM-killed, and it is unnecessary because DRAM traffic depends on shapes and access
+    patterns rather than on values, and none of these kernels branch on data.
+
+    **Index buffers are NOT synthesized** (D29). A gather through a random index has entirely
+    different L2 line reuse from one through a real neighbour list, where edges are largely
+    sorted by source atom and consecutive edges share cache lines -- and unmodelled L2 reuse is
+    exactly the term the T1 calibration residual identified. Synthetic connectivity would
+    measure the wrong graph, and an all-zeros index map (the previous behaviour) is the
+    best-case gather, which would flatter every scatter-add kernel S2 emits.
+
+    Correctness is established separately, on si_small, against the real interpreter
+    (tests/test_codegen.py).
     """
     from blocks.eso2_ir import build_forward
     from blocks.eso2_ref import BlockConfig
@@ -147,7 +180,6 @@ def _build_forward_env(fixture: str):
     from codegen.schedule import analyze_group, build_schedule
     from codegen.tile import build_tile_schedule, channel_axis
     from fixtures.load import fixture_stats
-    from zippel.ir import IndexType
     from zippel.simplify import fusion_groups, simplify
 
     import cutlass
@@ -164,11 +196,18 @@ def _build_forward_env(fixture: str):
     groups = fusion_groups(simp)
     stream = cutlass.cuda.default_stream()
 
+    # D29: real connectivity, synthetic values. Loaded once, and required -- not defaulted.
+    real_index = _fixture_index_maps(fixture, simp, sizes)
+
     def alloc(buf):
         t = simp.type_of(buf)
         n = 1 if t.segment == "none" else sizes[t.segment]
         if isinstance(t, IndexType):
-            return torch.zeros(n, dtype=torch.int64, device="cuda")
+            if buf not in real_index:
+                raise RuntimeError(
+                    f"index buffer {buf!r} has no real-fixture source; a traffic measurement "
+                    f"must not synthesize connectivity (DECISIONS.md D29)")
+            return real_index[buf]
         return torch.randn(n, *t.sizes, dtype=torch.float64, device="cuda")
 
     cases = []
@@ -248,7 +287,11 @@ def main():
     bw = stage1_fit_bandwidth(rows, args.gpu)
 
     payload = {"instrument": "dcgm dram_active (field 1005); ncu and CUPTI unavailable",
-               "nameplate_bw_bytes": PEAK_BW_BYTES, "fitted_bw_bytes": bw,
+               "device": "NVIDIA GH200 120GB SKU, 96GB HBM3, nominal peak 4.0 TB/s, "
+                         "measured achieved 3.6 TB/s",
+               "constant_note": "fitted_K is an effective instrument constant (achieved "
+                                "bandwidth / instrument response), NOT a bandwidth",
+               "nominal_peak_bytes": NOMINAL_PEAK_BYTES, "fitted_K": bw,
                "fixture": args.fixture, "rows": rows}
     if bw is None:
         payload["blocked"] = "dcgmi produced no usable samples"

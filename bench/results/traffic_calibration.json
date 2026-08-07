@@ -1,88 +1,90 @@
 {
   "instrument": "dcgm dram_active (field 1005); ncu and CUPTI unavailable",
-  "nameplate_bw_bytes": 4000000000000.0,
-  "fitted_bw_bytes": 4653530484334.227,
+  "device": "NVIDIA GH200 120GB SKU, 96GB HBM3, nominal peak 4.0 TB/s, measured achieved 3.6 TB/s",
+  "constant_note": "fitted_K is an effective instrument constant (achieved bandwidth / instrument response), NOT a bandwidth",
+  "nominal_peak_bytes": 4000000000000.0,
+  "fitted_K": 4690402121850.779,
   "fixture": "si_medium",
   "rows": [
     {
       "stage": "instrument",
       "case": "copy_256MiB",
       "known_bytes": 536870912,
-      "raw_bytes": 462942884.3569074,
-      "implied_bw": 4638765861977.024,
-      "dram_active": 0.76865625,
+      "raw_bytes": 444982403.0312961,
+      "implied_bw": 4825996788571.807,
+      "dram_active": 0.739,
       "iters": 19936,
-      "elapsed_s": 3.001741461979691,
-      "rel_error": 0.0031828772558286644
+      "elapsed_s": 3.001072120037861,
+      "rel_error": -0.028096717147040318
     },
     {
       "stage": "instrument",
       "case": "copy_512MiB",
       "known_bytes": 1073741824,
-      "raw_bytes": 922948138.0768207,
-      "implied_bw": 4653530484334.227,
-      "dram_active": 0.7723125,
+      "raw_bytes": 920693973.4253488,
+      "implied_bw": 4664923872609.928,
+      "dram_active": 0.76953125,
       "iters": 10048,
-      "elapsed_s": 3.0019528660341166,
-      "rel_error": 0.0
+      "elapsed_s": 3.005444237962365,
+      "rel_error": 0.005461664527999455
     },
     {
       "stage": "instrument",
       "case": "copy_1024MiB",
       "known_bytes": 2147483648,
-      "raw_bytes": 1838891389.5071826,
-      "implied_bw": 4671257172128.081,
-      "dram_active": 0.77753125,
+      "raw_bytes": 1831385533.4455862,
+      "implied_bw": 4690402121850.779,
+      "dram_active": 0.77409375,
       "iters": 5088,
-      "elapsed_s": 3.0083290510228835,
-      "rel_error": -0.0037948430455989612
+      "elapsed_s": 3.009354356036056,
+      "rel_error": -1.1102230246251565e-16
     },
     {
       "stage": "model",
       "case": "wigner_chain",
       "template": "T1",
       "model_bytes": 368453844,
-      "measured_bytes": 467648959.3330549,
-      "rel_error": 0.26921992251777105,
+      "measured_bytes": 453849106.5030324,
+      "rel_error": 0.2317665126680898,
       "live_in_bytes": 200314692,
       "live_out_bytes": 168139152,
       "avoided_bytes": 2017669824,
-      "dram_active": 0.22065625,
-      "iters": 6592,
-      "elapsed_s": 3.002191385952756
+      "dram_active": 0.21334375,
+      "iters": 6624,
+      "elapsed_s": 3.0042896830127575
     },
     {
       "stage": "model",
       "case": "radial_lin0",
       "template": "T2",
       "model_bytes": 930283520,
-      "measured_bytes": 948807933.470401,
-      "rel_error": 0.01991265358586708,
+      "measured_bytes": 928715803.1258186,
+      "rel_error": -0.0016852033175664444,
       "live_in_bytes": 664582144,
       "live_out_bytes": 265701376,
       "avoided_bytes": 0,
-      "dram_active": 0.008871794871794873,
+      "dram_active": 0.008615384615384617,
       "iters": 160,
-      "elapsed_s": 3.677089790988248
+      "elapsed_s": 3.6772069329745136
     },
     {
       "stage": "model",
       "case": "radial_stage2",
       "template": "T2",
       "model_bytes": 533612688,
-      "measured_bytes": 518566943.61921585,
-      "rel_error": -0.02819600193011931,
+      "measured_bytes": 527193212.58659285,
+      "rel_error": -0.012030215093774433,
       "live_in_bytes": 267911312,
       "live_out_bytes": 265701376,
       "avoided_bytes": 1594208256,
-      "dram_active": 0.0116875,
+      "dram_active": 0.011787878787878788,
       "iters": 320,
-      "elapsed_s": 3.0510590999620035
+      "elapsed_s": 3.0512237030197866
     }
   ],
-  "instrument_residual": 0.0037948430455989612,
+  "instrument_residual": 0.028096717147040318,
   "worst_rel_error_by_template": {
-    "T1": 0.26921992251777105,
-    "T2": 0.02819600193011931
+    "T1": 0.2317665126680898,
+    "T2": 0.012030215093774433
   }
 }

@@ -995,10 +995,18 @@ That the T2 discrepancy is *purely* ordering was established rather than assumed
 same-order FP64 reference differs from the interpreter by the identical 1.554e-15.
 
 The mechanism matters more than the numbers. A bound cannot be loosened without changing the
-schedule that produced it, so "the tolerance was widened" cannot be a quiet step. Its honest
-limitation: a rigorous worst-case bound is loose — measured errors are 0.2–0.9 % of it — so it
-catches what actually goes wrong in generated code (a dropped term, a missing barrier, a
-transposed index, all O(1)) and is not a sub-ulp check.
+schedule that produced it, so "the tolerance was widened" cannot be a quiet step.
+
+**The bound's design point, stated so it is not mistaken for something it is not.** The failure
+modes it exists to catch — a dropped term, a missing barrier, a transposed index, a wrong slice —
+do not perturb a result by ulps. They produce O(1) errors, roughly **ten orders of magnitude**
+above the 1e-15 ordering noise the bound is drawn at. Against that separation a loose worst-case
+bound over Σ|terms| is not a weakness: it is a razor sitting in a vast empty gap, and its
+looseness (measured errors run 0.2–0.9 % of it) costs nothing because nothing real lands in
+between. What it is *not* is a precision certificate. It makes no claim that a kernel is accurate
+to its bound, only that no *structural* error is present; a bug that shifted the answer by a few
+ulps would pass, and no test here asserts otherwise. T1's separate bit-equality assertion is the
+tight check, and it applies wherever the summation orders genuinely coincide.
 
 ### 8.5c A calibrated traffic model, and an instrument blocker
 
@@ -1008,9 +1016,24 @@ per-group DRAM **byte** model (D27). It is calibrated before it decides anything
 **Blocker: `ncu` and CUPTI are not installed on this system.** `nvidia-cuda-cupti-cu13` resolves
 only to a 0.0.1 stub and `libcupti.so` does not load. `dcgmi` is present, so the substitute is
 DCGM's `dram_active` counter. Being coarser, the *instrument* is calibrated first against
-`copy_` at known traffic: the raw counter reads a consistent −16 % against a 4.0 TB/s nameplate,
-and the fitted effective bandwidth is **4.777 TB/s** — not a fudge factor but the recovery of
-GH200's real HBM3e bandwidth, which my constant had wrong. Residual after the fit: **0.4 %**.
+`copy_` at known traffic: the raw counter reads a consistent −16 % against the device's 4.0 TB/s
+nominal peak, and the fitted constant is **K = 4.777e12**, with a residual of **0.4 %**.
+
+**K is not a bandwidth, and I first recorded it as one.** The device is a GH200 120GB SKU with
+96 GB HBM3 — 102.0 GB frame buffer, 60 MiB L2, 2 619 MHz memory clock — whose nominal peak is
+4.0 TB/s, and whose *measured* achieved copy bandwidth (CUDA events, no DCGM involved) is
+3.387–3.596 TB/s. K exceeds both, and nothing can move data faster than the peak. So K is a
+**calibrated effective instrument constant**, ≈ achieved bandwidth ÷ instrument response, folding
+DCGM's ~27 % under-reporting of the busy fraction together with the real bandwidth into one
+number that the fit cannot separate.
+
+The 0.4 % residual distinguishes nothing here, and treating it as evidence was the error: a
+constant fitted to reproduce known traffic reproduces known traffic well under either story. Only
+the device's capacity and an achieved-bandwidth measurement taken *without* the instrument under
+test discriminate, and both say HBM3. Everything derived from K is unchanged and remains valid —
+it is fitted to this instrument on this machine — but it is not portable to another GPU or
+another DCGM version without re-fitting, which the bandwidth framing would have wrongly implied.
+`findings/dcgm-bandwidth-constant.md`.
 
 Against that instrument, after four modelling corrections (full buffers → element fraction →
 32-byte sectors → 128-byte L2 lines, each forced by measurement — `findings/traffic-model-calibration.md`):
@@ -1053,3 +1076,13 @@ The same run also exposed a real bug in the max-batch metric: it reported bf16 `
 against `k=3` at 62.59 GiB — a larger batch using less memory. The exponential probe advanced its
 lower bound without carrying the corresponding peak, so every result reported the `k=1` peak.
 Fixed.
+
+### 8.9 Parked
+
+* **`ncu` cross-validation of the DCGM methodology.** `ncu` is absent from the default
+  environment but very likely available on Alps through a `uenv` image. A single `ncu` run on the
+  `copy_` calibration kernel would independently confirm the byte counts DCGM's `dram_active`
+  implies, and would separate the two factors currently folded into K
+  (`findings/dcgm-bandwidth-constant.md`). Low priority and explicitly **not blocking**: the
+  instrument is already validated against known traffic to 0.4 %, which is what the traffic model
+  needs. Worth one hour if one ever frees up.

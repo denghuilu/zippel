@@ -18,10 +18,17 @@ about anything else**, against `copy_` at three sizes where the traffic is known
 | 512 | 1,073,741,824 | 899,123,357 | −16.3 % |
 | 1024 | 2,147,483,648 | 1,786,097,811 | −16.8 % |
 
-The bias is systematic, and the fitted effective bandwidth is **4.777 TB/s** against the 4.0 TB/s
-I had assumed. That is not a fudge factor absorbing error — it is the recovery of a physically
-real number, since GH200's HBM3e is ~4.9 TB/s and my nameplate constant was simply wrong.
-Residual after the fit: **0.4–3.1 %** across runs. The instrument is good.
+The bias is systematic, and the fitted constant is **K = 4.777e12** against the 4.0 TB/s nominal
+peak. Residual after the fit: **0.4–3.1 %** across runs, so the instrument is linear across the
+range probed and the constant is trustworthy in service.
+
+**K is not a bandwidth** — see `dcgm-bandwidth-constant.md`, which corrects an earlier claim here
+that it was. This device is a GH200 96GB HBM3 part with a 4.0 TB/s nominal peak and a measured
+3.6 TB/s achieved copy rate; K exceeds both, so it must be an effective constant (achieved
+bandwidth ÷ instrument response) rather than a physical rate. **The residual distinguishes
+nothing between those readings**: a constant fitted to reproduce known traffic will fit it well
+whether the peak was underestimated or the counter under-reports. Only device identity and an
+independent bandwidth measurement discriminate.
 
 ## What the model got wrong, three times
 

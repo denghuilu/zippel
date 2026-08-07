@@ -7,6 +7,8 @@ emitter reorders nothing, so any difference is a codegen bug, not rounding.
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 import torch
 
@@ -182,3 +184,37 @@ def test_t1_refuses_a_channel_group(forward_env):
     spec = analyze_group(simp, group, name="radial_lin0")
     with pytest.raises(ValueError, match="register budget"):
         emit_source(simp, build_schedule(simp, spec))
+
+
+def test_traffic_harness_refuses_synthetic_connectivity():
+    """D29: a traffic measurement must not invent an index map.
+
+    An all-zeros index buffer is the best-case gather -- every thread hits one cache line -- so
+    substituting one would flatter every scatter-add kernel S2 emits, in exactly the L2-reuse
+    term the T1 calibration residual identified as unmodelled. The harness must fail rather than
+    default.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "traffic_calibrate", "bench/traffic_calibrate.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    source = pathlib.Path("bench/traffic_calibrate.py").read_text()
+    assert "must not synthesize connectivity" in source, \
+        "the D29 guard has been removed from the traffic harness"
+    # the guard must raise, not warn or substitute
+    assert "raise RuntimeError" in source.split("def alloc")[1].split("return torch.randn")[0]
+
+
+def test_traffic_model_gate_is_per_template():
+    """D27/D28: the model may drive T2 decisions and may not drive T1 ones."""
+    from codegen.traffic import calibrated
+
+    ok_t2, why_t2 = calibrated("T2")
+    ok_t1, why_t1 = calibrated("T1")
+    assert ok_t2, f"T2 should be calibrated: {why_t2}"
+    assert not ok_t1, (
+        f"T1 is calibrated at {why_t1} -- if the L2-reuse term has been modelled, update D28's "
+        f"operating rule and this test together")

@@ -366,3 +366,45 @@ it is calibrated before it decides anything: measured against ncu DRAM traffic o
 kernels that already work (Wigner T1, radial T2), with the error logged. **±20 % or it is
 recalibrated before it drives any fusion or template decision.** An uncalibrated cost model that
 selects its own inputs is how a compiler talks itself into a bad schedule.
+
+## 2026-08-07 — D28: the traffic model has two roles, and the T1 calibration disqualifies it from only one.
+
+Measured: the model predicts T2 groups to 2.8 % and T1 groups to +26.9 %, always in the same
+direction -- it **under-predicts** T1 traffic, i.e. the kernel moves more than the model charges.
+That single number licenses one role and forbids the other:
+
+* **As a budget / refusal bound (D26): valid.** D26 asks that an estimator gating a decision be
+  an upper bound. Once the sign is known to be one-directional, the model *inverted* -- charge
+  T1 groups their measured 1.27x factor -- is a conservative ceiling, and a ceiling is all a
+  refusal test needs. "Will this group's traffic fit the budget" tolerates a 27 % margin.
+* **As a ranking objective (D27): invalid.** Choosing between two fusions asks for the *sign of a
+  difference*, and a 27 % one-sided error swamps any gap smaller than that. A model that ranks A
+  above B when the true order is the reverse is worse than no model, because it carries the
+  authority of a number.
+
+**Operating rule for S2 grouping.** The model decides only when the predicted gap between
+alternatives exceeds the uncertainty band for the templates involved (2.8 % where both are T2,
+26.9 % where any T1 group participates). Alternatives *inside* the band are not modelled --
+they are emitted and timed, and the measurement decides. That keeps the model in the role it has
+earned and puts the burden of proof on the hardware everywhere else.
+
+This also sets the priority for improving it: the L2-reuse term is worth modelling exactly to the
+extent that S2 turns out to have close calls involving T1 groups. If it does not, the band is
+adequate and the effort belongs elsewhere.
+
+## 2026-08-07 — D29: traffic measurements use real fixture connectivity; only values are synthetic.
+
+Stage 2 of `bench/traffic_calibrate.py` synthesizes inputs from IR types because the full FP64
+forward at si_medium materialises ~40 GiB and gets OOM-killed, and because DRAM traffic depends
+on shapes and access patterns rather than values.
+
+"Access patterns" is doing real work in that sentence, and it is where the shortcut can go wrong.
+A gather or scatter through a **random** index buffer has entirely different L2 line reuse from
+one through a real neighbour list, where edges are largely sorted by source atom and consecutive
+edges touch overlapping cache lines. That is precisely the term the T1 residual identified as
+unmodelled, so measuring it against synthetic connectivity would be measuring the wrong graph.
+
+Rule, asserted in the harness rather than remembered: **index buffers come from the real fixture;
+only floating-point values are synthetic.** A traffic measurement that cannot obtain real
+connectivity fails rather than silently substituting zeros -- an all-zeros index map is the
+best-case gather (perfect reuse, one line) and would flatter every scatter-add kernel S2 emits.
