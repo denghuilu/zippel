@@ -1187,9 +1187,20 @@ are described as expensive.
 | schedule construction | 23.5 s |
 | guard | 0.2 s |
 
-Cold on every run: the CuTe DSL JIT cache is not functioning here (§8.9, R8), so this is what it
-costs to build the forward from scratch each time. It is quoted as a cold number deliberately —
-a warm number would describe a cache that does not currently work.
+Quoted as a **cold** number deliberately: it is what building the forward from scratch costs, and
+that is the number a reviewer wants. The cache does work — see below — but a warm number would
+describe reuse rather than cost.
+
+**The "broken cache" was mine, twice reported and wrong.** `CUTE_DSL_CACHE_DIR`, pinned in
+`env.sh` alongside the Triton and Inductor equivalents since Phase 0, **appears zero times in
+nvidia-cutlass-dsl 4.5.2**. CuTe DSL's persistent cache instead follows `TMPDIR`, resolving to
+`$TMPDIR/<user>/cutlass_python_cache` — and `env.sh` redirects `TMPDIR` into the repo, so the
+cache was working the whole time for anything that sourced it. Every "cache is broken"
+observation came from a direct invocation that set the variable which does nothing and inherited
+the system `TMPDIR`, which Alps purges. **[correlation → diagnosis]**: the variable was set, the
+cache was empty, and I joined them without asking where the cache would be if the variable were
+ignored. `findings/cute-dsl-cache-dir-is-a-noop.md`; upstream note drafted, not filed, and
+deliberately weaker than the other two since nothing there is incorrect — only surprising.
 
 ### 8.6 Standing threads
 
@@ -1220,6 +1231,10 @@ lower bound without carrying the corresponding peak, so every result reported th
 Fixed.
 
 ### 8.9 Parked
+
+* **R8 — CuTe DSL JIT cache.** *Closed, and it was my configuration error.* Diagnosed inside a
+  one-hour timebox: `CUTE_DSL_CACHE_DIR` is a no-op, the real cache follows `TMPDIR`, and
+  `env.sh` was already redirecting it. See §8.5e. Upstream usability note drafted, not filed.
 
 * **`ncu` cross-validation of the DCGM methodology.** `ncu` is absent from the default
   environment but very likely available on Alps through a `uenv` image. A single `ncu` run on the

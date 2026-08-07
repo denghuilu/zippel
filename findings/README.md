@@ -27,6 +27,7 @@ was learned the expensive way here.
 | **A good fit is not an explanation.** A constant fitted to reproduce known traffic fits it well under either physical story; the 0.4 % residual distinguished nothing, and only the device's capacity and an independent bandwidth measurement did. | `dcgm-bandwidth-constant.md` |
 | **A tight correlation is not a mechanism.** Schedule cost fitted index-space volume at R² 0.976, and the inferred cause (walking the dense index space) was wrong: 97 % of it was a quadratic liveness scan, correlated with volume only because bigger spaces make more assignments. Profile before attributing. | D31 |
 | **A falsification test can be vacuous in the way the assertion it validates can be.** The first planted dropped-term fault deleted `−sin(0·γ)`, which is exactly zero, so the test passed while proving nothing. | `compiled-ran-clean-wrong.md` |
+| **A variable that is set and ignored looks exactly like one that is honoured and unhelpful.** `CUTE_DSL_CACHE_DIR` does not exist in the package; distinguishing the two costs one `grep`, which I ran only after reporting "the cache is broken" to review twice. | `cute-dsl-cache-dir-is-a-noop.md` |
 | **An estimator that gates a decision must be conservative or carry a falsification test.** `peak_live_values` under-reported by two orders of magnitude and its guard failed by *not raising*. | D26 |
 
 ## Entries
@@ -43,4 +44,5 @@ was learned the expensive way here.
 | `traffic-model-calibration.md` | stands — what the traffic model predicts, and what it does not |
 | `dcgm-bandwidth-constant.md` | **MECHANISM CORRECTED** — the fit stays in service; it is not a bandwidth |
 | `compiled-ran-clean-wrong.md` | stands — my `invar_101` bug, and the three-codebase table for its failure class |
-| `keyed-by-identity.md` | stands — one bug class, three instances, three different detection mechanisms |
+| `keyed-by-identity.md` | stands — one bug class, four instances, four different detection mechanisms |
+| `cute-dsl-cache-dir-is-a-noop.md` | stands — a variable set for weeks that does nothing; the real cache follows `TMPDIR` |
