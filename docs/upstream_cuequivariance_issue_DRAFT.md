@@ -2,8 +2,7 @@
 
 ---
 
-**Title:** `method="indexed_linear"` gives wrong results on multi-path `SegmentedPolynomial`s
-(disagrees with `fused_tp` and `naive`)
+**Title:** `method="indexed_linear"` does not accumulate paths that share an output segment
 
 **Version:** cuequivariance 0.11.0, cuequivariance-torch 0.11.0, cuequivariance-ops-torch-cu13
 0.11.0
@@ -78,32 +77,49 @@ indexed_linear   rel err vs descriptor semantics = 8.298e-01
 naive            rel err vs descriptor semantics = 1.173e-16
 ```
 
-### Scope — it tracks path count, not size
+### Scope — the trigger is a shared output segment, nothing else
 
-Sweeping a ladder of descriptors (all FP64, all with a one-row weight table plus
-`input_indices`):
+Varying one structural property at a time, with hand-built `SegmentedTensorProduct`s so that
+nothing else differs (all FP64, one-row weight table plus `input_indices`, `U=4`, `V=3`):
 
-| descriptor | paths | `fused_tp` | `indexed_linear` | `naive` |
-|---|---|---|---|---|
-| `1x0 -> 1x0`, m_max=0 | 1 | 0.0 | **0.0** | 0.0 |
-| `2x0 -> 3x0`, m_max=0 | 1 | 0.0 | **1.7e-08** | 7.0e-17 |
-| `2x1 -> 2x1`, m_max=1 | 5 | 0.0 | **8.3e-01** | 1.2e-16 |
-| `2x0+2x1`, m_max=1 | 5 | 0.0 | **4.3e-01** | 0.0 |
-| `2x0+2x1+2x2`, m_max=2 | 9 | 1.4e-16 | **6.2e-01** | 1.4e-16 |
-| `256x0+256x1+256x2 -> 128x0+128x1+128x2`, m_max=2 | 9 | 7.7e-16 | **6.0e-01** | 0.0 |
+| case | paths | reused weight | negative coeff | shared output | `indexed_linear` |
+|---|---|---|---|---|---|
+| 1 path | 1 | no | no | – | 9.85e-17 ✅ |
+| 2 paths, distinct outputs | 2 | no | no | no | 1.14e-16 ✅ |
+| 2 paths, reused weight | 2 | **yes** | no | no | 9.85e-17 ✅ |
+| 2 paths, negative coefficient | 2 | no | **yes** | no | 1.14e-16 ✅ |
+| 2 paths, reused + negative | 2 | yes | yes | no | 9.85e-17 ✅ |
+| 4 paths, reused + negative | 4 | yes | yes | no | 9.52e-17 ✅ |
+| heterogeneous segment sizes | 2 | no | no | no | 1.64e-16 ✅ |
+| **2 paths → one output segment** | 2 | no | no | **yes** | **7.69e-01** ❌ |
+| 2 paths → one output, −c | 2 | no | yes | **yes** | **1.31e+00** ❌ |
+| 2 paths, reused weight → one output | 2 | yes | yes | **yes** | **1.14e+00** ❌ |
+| 4 paths, reused, −c → one output | 4 | yes | yes | **yes** | **7.34e-01** ❌ |
 
-`indexed_linear` is correct on both single-path descriptors and wrong on every multi-path one,
-independently of size. At m ≥ 1 an eSCN descriptor introduces three things simultaneously —
-multiple paths, **weight-segment reuse** (one weight segment is referenced by two paths with
-different in/out segment pairs) and a **negative path coefficient** — so we cannot say from the
-outside which of the three is the trigger.
+Every failure has two or more paths writing to the same output segment; every correct case does
+not. Weight reuse, negative coefficients, path count alone, and heterogeneous segment sizes are
+all ruled out. `fused_tp` and `naive` are correct on all eleven, at 0.00e+00.
+
+The magnitudes (0.73–1.31 relative) are what dropping one of two comparable contributions would
+give, which is consistent with the paths not being **accumulated** — written rather than added,
+or only one executed per output. We have not read the kernel source, so that is the shape of the
+symptom rather than a diagnosis.
 
 ### Secondary observation
 
-`indexed_linear` warns `` `indexed_linear` does not support explicit `math_dtype`. This will be
-ignored. `` and the `2x0 -> 3x0` row above is accurate only to ~1.7e-08, i.e. FP32, even though
-both operands and `math_dtype` are FP64. Silently dropping to single precision is worth
-documenting even independently of the correctness issue.
+The three backends disagree on what `math_dtype` means when it conflicts with the operand dtype.
+With FP64 operands on a descriptor `indexed_linear` handles correctly:
+
+| method | `math_dtype=float32` with FP64 operands |
+|---|---|
+| `fused_tp` | raises `ValueError: Fused TP does not support float32 math_dtype with float64 inputs` |
+| `naive` | honours it — result accurate to 1.65e-07 |
+| `indexed_linear` | warns that `math_dtype` is ignored, then computes in FP64 (rel err 0.00e+00) |
+
+So `indexed_linear` cannot be asked for reduced-precision math: the request is accepted, warned
+about and dropped, and a user tuning for speed silently gets FP64. Whichever behaviour is
+intended, three different ones for a single argument seems worth reconciling. This is
+independent of the correctness bug above.
 
 ### Why it matters
 
@@ -129,9 +145,9 @@ Happy to file that separately if useful.)
 
 ## TODO before this is sendable
 
-1. Narrow the trigger: build a hand-made `SegmentedTensorProduct` that isolates multi-path from
-   weight-reuse from negative-coefficient, instead of relying on `escn_tp_compact` which
-   introduces all three at once. That would make the report actionable rather than descriptive.
+1. ~~Narrow the trigger~~ — **done**; it is a shared output segment, and the report above is
+   now written against hand-built descriptors rather than `escn_tp_compact`, so item 4 below
+   matters much less.
 2. Re-check against the latest cuequivariance release, and on x86 as well as aarch64, to rule out
    a platform-specific build issue.
 3. Search existing issues for duplicates.

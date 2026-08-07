@@ -1,0 +1,123 @@
+[
+  {
+    "case": "1 path,  uniq w, +c",
+    "n_paths": 1,
+    "reused_weight": false,
+    "negative_coeff": false,
+    "shared_out": false,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 9.854370272466579e-17,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths, uniq w, +c",
+    "n_paths": 2,
+    "reused_weight": false,
+    "negative_coeff": false,
+    "shared_out": false,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 1.1441804358163443e-16,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths, REUSE w, +c",
+    "n_paths": 2,
+    "reused_weight": true,
+    "negative_coeff": false,
+    "shared_out": false,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 9.854370272466579e-17,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths, uniq w, -c",
+    "n_paths": 2,
+    "reused_weight": false,
+    "negative_coeff": true,
+    "shared_out": false,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 1.1441804358163443e-16,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths, REUSE w, -c",
+    "n_paths": 2,
+    "reused_weight": true,
+    "negative_coeff": true,
+    "shared_out": false,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 9.854370272466579e-17,
+    "naive": 0.0
+  },
+  {
+    "case": "4 paths, REUSE w, -c",
+    "n_paths": 4,
+    "reused_weight": true,
+    "negative_coeff": true,
+    "shared_out": false,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 9.519691594641939e-17,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths -> SHARED out",
+    "n_paths": 2,
+    "reused_weight": false,
+    "negative_coeff": false,
+    "shared_out": true,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 0.7690288342167182,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths -> SHARED out, -c",
+    "n_paths": 2,
+    "reused_weight": false,
+    "negative_coeff": true,
+    "shared_out": true,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 1.3127432717765302,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths REUSE w -> SHARED",
+    "n_paths": 2,
+    "reused_weight": true,
+    "negative_coeff": true,
+    "shared_out": true,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 1.1401441987479586,
+    "naive": 0.0
+  },
+  {
+    "case": "2 paths, HETERO sizes",
+    "n_paths": 2,
+    "reused_weight": false,
+    "negative_coeff": false,
+    "shared_out": false,
+    "hetero": true,
+    "fused_tp": 0.0,
+    "indexed_linear": 1.6419606168851457e-16,
+    "naive": 0.0
+  },
+  {
+    "case": "4 paths REUSE -c SHARED",
+    "n_paths": 4,
+    "reused_weight": true,
+    "negative_coeff": true,
+    "shared_out": true,
+    "hetero": false,
+    "fused_tp": 0.0,
+    "indexed_linear": 0.734416703241068,
+    "naive": 0.0
+  }
+]

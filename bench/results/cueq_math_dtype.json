@@ -1,0 +1,38 @@
+[
+  {
+    "method": "fused_tp",
+    "math_dtype": "torch.float64",
+    "rel_err": 5.585171942488249e-16,
+    "warned_math_dtype_ignored": false
+  },
+  {
+    "method": "fused_tp",
+    "math_dtype": "torch.float32",
+    "rel_err": null,
+    "rejected": "Fused TP does not support float32 math_dtype with float64 inputs."
+  },
+  {
+    "method": "indexed_linear",
+    "math_dtype": "torch.float64",
+    "rel_err": 0.0,
+    "warned_math_dtype_ignored": true
+  },
+  {
+    "method": "indexed_linear",
+    "math_dtype": "torch.float32",
+    "rel_err": 0.0,
+    "warned_math_dtype_ignored": true
+  },
+  {
+    "method": "naive",
+    "math_dtype": "torch.float64",
+    "rel_err": 5.585171942488249e-16,
+    "warned_math_dtype_ignored": false
+  },
+  {
+    "method": "naive",
+    "math_dtype": "torch.float32",
+    "rel_err": 1.6509563494359566e-07,
+    "warned_math_dtype_ignored": false
+  }
+]
