@@ -37,8 +37,24 @@ from dataclasses import dataclass, field
 
 from zippel.ir import IndexType, Program
 
-#: Sentinel for "this thread's own channel" in an index tuple.
-CH = "c"
+@dataclass(frozen=True)
+class Ch:
+    """This thread's channel, plus a constant offset.
+
+    The offset is not decoration. A path may write a *slice* of the output channel axis while
+    reading a different slice of its operand -- `invar_101` writes [0:128], [128:256], [256:384]
+    from three m-ranges of one buffer, and `xedge_7` concatenates three operands into one
+    320-wide axis. Thread `c` then participates only within the path's output range, and reads
+    its operand at `c - out_start + in_start`. Treating every channel index as bare `c` silently
+    computed the wrong element: it produced an O(1) error on `invar_101` (4.47 against a 9.9e-15
+    bound), which is what the per-kernel bound is for.
+    """
+
+    offset: int = 0
+
+
+#: This thread's own channel, no offset.
+CH = Ch(0)
 
 
 @dataclass(frozen=True)
@@ -57,6 +73,8 @@ class TileAssign:
     fn: str | None = None
     order: int = 0
     source: tuple[str, tuple] | None = None
+    #: Half-open channel range of threads that execute this assignment. `None` means all of them.
+    ch_range: tuple[int, int] | None = None
 
 
 @dataclass
@@ -97,12 +115,16 @@ def _sliced(t, sl):
     return tuple(len(range(*s.indices(f))) for s, f in zip(sl, t.sizes)) if sl else t.sizes
 
 
-def _offset(sl, idx):
+def _offset(sl, idx, ch_base: int = 0):
+    """Apply slice offsets. A channel component accumulates `start - ch_base` into its offset."""
     if not sl:
         return idx
     out = []
     for s, i in zip(sl, idx):
-        out.append(i if i == CH else (s.start or 0) + i)
+        if isinstance(i, Ch):
+            out.append(Ch(i.offset + (s.start or 0) - ch_base))
+        else:
+            out.append((s.start or 0) + i)
     return tuple(out)
 
 
@@ -146,20 +168,28 @@ def build_tile_schedule(prog: Program, spec, axis: int, extent: int) -> TileSche
             summed = [c for c in extent_of if c not in out_spec]
             ch_summed = [c for c in summed if extent_of[c] == extent and c != ch_letter]
 
+            # The output channel slice decides which threads run this path, and supplies the
+            # base that operand channel offsets are measured against.
+            out_ch = p.out_slice[axis] if (p.out_slice and axis < len(p.out_slice)) else None
+            ch_lo = (out_ch.start or 0) if out_ch is not None else 0
+            ch_hi = out_ch.stop if (out_ch is not None and out_ch.stop is not None) else extent
+            ch_range = None if (ch_lo == 0 and ch_hi == extent) else (ch_lo, ch_hi)
+
             # unroll every letter except the output's channel letter
             free = [c for c in sorted(extent_of) if c != ch_letter]
             for combo in itertools.product(*(range(extent_of[c]) for c in free)):
                 assign = dict(zip(free, combo))
                 if ch_letter is not None:
                     assign[ch_letter] = CH
-                out_idx = _offset(p.out_slice, tuple(assign[c] for c in out_spec))
+                out_idx = _offset(p.out_slice, tuple(assign[c] for c in out_spec), ch_base=ch_lo)
                 factors = []
                 for pos, j in enumerate(p.operands):
-                    idx = _offset(p.slices_for(pos), tuple(assign[c] for c in specs[pos]))
+                    idx = _offset(p.slices_for(pos), tuple(assign[c] for c in specs[pos]),
+                                  ch_base=ch_lo)
                     buf = op.inputs[j]
                     # Cross-channel read: this operand is indexed by a summed channel letter, so
                     # thread `c` needs a value belonging to channel k != c.
-                    cross = any(ch in ch_summed for ch in specs[pos])
+                    cross = any(c in ch_summed for c in specs[pos])
                     # It only has to travel through smem if it lives in another thread's
                     # *registers*. A live-in is in gmem and every thread can just read it --
                     # correct, and it keeps the barrier count down. A weight matrix indexed
@@ -168,10 +198,13 @@ def build_tile_schedule(prog: Program, spec, axis: int, extent: int) -> TileSche
                     if from_smem:
                         need_stage.add(buf)
                     factors.append((buf, idx, from_smem))
-                acc.setdefault(out_idx, []).append(TileTerm(p.coeff, tuple(factors)))
+                acc.setdefault((out_idx, ch_range), []).append(
+                    TileTerm(p.coeff, tuple(factors)))
 
-        for idx in sorted(acc, key=str):
-            sched.assigns.append(TileAssign(target=n, index=idx, terms=tuple(acc[idx])))
+        for key in sorted(acc, key=str):
+            idx, ch_range = key
+            sched.assigns.append(TileAssign(target=n, index=idx, terms=tuple(acc[key]),
+                                            ch_range=ch_range))
         produced.add(n)
 
     # Each staged buffer is written to smem and barriered once, immediately before the first
@@ -190,4 +223,5 @@ def build_tile_schedule(prog: Program, spec, axis: int, extent: int) -> TileSche
     return sched
 
 
-__all__ = ["CH", "TileSchedule", "TileAssign", "TileTerm", "build_tile_schedule", "channel_axis"]
+__all__ = ["CH", "Ch", "TileSchedule", "TileAssign", "TileTerm", "build_tile_schedule",
+           "channel_axis"]

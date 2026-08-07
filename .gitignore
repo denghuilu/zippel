@@ -13,3 +13,8 @@ fixtures/*.npz
 bench/results/*.log
 slurm/logs/
 codegen/_generated/
+
+# Core dumps. A segfaulting kernel drops multi-GB cores in the repo root; `git add -A`
+# swept 8.7 GB of them into a commit and the remote rejected the 5.5 GiB pack.
+core_*
+core.*

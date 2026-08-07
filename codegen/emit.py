@@ -81,6 +81,24 @@ def _term_expr(term, dt: str) -> str:
     return f"{dt}({term.coeff!r}) * {factors}"
 
 
+#: Terms per emitted statement; see codegen/emit_tile.py. Chunking is left-to-right, so the
+#: summation order -- and therefore the ordering bound -- is unchanged.
+CHUNK = 48
+
+
+def _chunked_sum(target: str, parts: list[str], uid: int) -> list[str]:
+    if len(parts) <= CHUNK:
+        return [f"{target} = " + " + ".join(parts)]
+    lines, acc = [], None
+    for k in range(0, len(parts), CHUNK):
+        piece = parts[k:k + CHUNK]
+        name = f"_s{uid}_{k // CHUNK}"
+        lines.append(f"{name} = " + " + ".join(([acc] if acc else []) + piece))
+        acc = name
+    lines.append(f"{target} = {acc}")
+    return lines
+
+
 def emit_source(prog: Program, sched: Schedule, block: int = 128,
                 dtype: str = "f32", budget: int = REGISTER_BUDGET) -> str:
     """Emit a complete CuTe DSL module for one register-resident fusion group."""
@@ -115,14 +133,15 @@ def emit_source(prog: Program, sched: Schedule, block: int = 128,
         for idx in sorted(wanted.get(buf, ())):
             body.append(f"{_sym(buf, idx)} = {_ref(prog, buf, idx, spec.segment)}")
 
-    for a in sched.assigns:
+    for i, a in enumerate(sched.assigns):
         if a.fn is not None:
-            rhs = _fn_expr(a.fn, a.order, _sym(*a.source), dt)
+            body.append(f"{_sym(a.target, a.index)} = "
+                        f"{_fn_expr(a.fn, a.order, _sym(*a.source), dt)}")
         elif not a.terms:
-            rhs = f"{dt}(0.0)"
+            body.append(f"{_sym(a.target, a.index)} = {dt}(0.0)")
         else:
-            rhs = " + ".join(_term_expr(t, dt) for t in a.terms)
-        body.append(f"{_sym(a.target, a.index)} = {rhs}")
+            parts = [_term_expr(t, dt) for t in a.terms]
+            body.extend(_chunked_sum(_sym(a.target, a.index), parts, i))
 
     for buf in spec.live_out:
         for idx in sorted(sched.masks[buf]):
@@ -151,6 +170,10 @@ TENSOR_ORDER = {tensors!r}
 #: Correctness contract for this kernel (DECISIONS.md D25). REDUCTION_DEPTH is the most terms
 #: any single output element sums; the harness turns it into a numeric bound against real
 #: inputs and asserts measured <= bound. EXACT additionally demands bit-equality.
+#: Which segment axis this kernel iterates. The caller must pass that segment's length as
+#: `n_seg`; passing another segment's length indexes past the end of every buffer. A node-rooted
+#: group launched with the edge count segfaults, which is how this came to be declared.
+SEGMENT = "{spec.segment}"
 TEMPLATE = "T1"
 REDUCTION_DEPTH = {depth}
 EXACT = True

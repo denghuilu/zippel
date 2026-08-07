@@ -89,7 +89,7 @@ def read_fraction(prog: Program, sched, itemsize: int) -> dict[str, float]:
     Sector occupancy is the physics between those two errors, and it is computable from the
     layout and the index set alone.
     """
-    from codegen.tile import CH
+    from codegen.tile import Ch
 
     seen: dict[str, set] = {}
     live_in = set(sched.spec.live_in)
@@ -121,7 +121,7 @@ def read_fraction(prog: Program, sched, itemsize: int) -> dict[str, float]:
         for idx in idxs:
             base = [0]
             for pos, i in enumerate(idx):
-                if i == CH:
+                if isinstance(i, Ch):
                     base = [b + c * strides[pos] for b in base for c in range(channel_extent)]
                 else:
                     base = [b + i * strides[pos] for b in base]

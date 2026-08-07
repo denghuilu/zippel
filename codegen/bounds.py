@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import torch
 
-from codegen.tile import CH, TileSchedule
+from codegen.tile import CH, Ch, TileSchedule
 
 #: FP64 unit roundoff.
 EPS = torch.finfo(torch.float64).eps
@@ -45,20 +45,30 @@ def reduction_depth(sched) -> int:
     return max((len(a.terms) for a in sched.assigns), default=1)
 
 
-def _factor_tensor(env: dict[str, torch.Tensor], buf: str,
-                   idx: tuple) -> tuple[torch.Tensor, bool]:
+def _factor_tensor(env: dict[str, torch.Tensor], buf: str, idx: tuple,
+                   window: tuple[int, int] | None = None) -> tuple[torch.Tensor, bool]:
     """|env[buf]| at trailing index `idx`, and whether that index ranges over channels.
 
     The segment axis is always kept (a `none`-segment buffer keeps its length-1 axis, which
-    broadcasts). A `CH` component is kept too -- it is the thread index, so the magnitude has to
-    be evaluated for every channel rather than one.
+    broadcasts). A channel component is kept too -- it is the thread index, so the magnitude is
+    evaluated over every participating channel rather than one.
+
+    `window` is the half-open range of thread channels this assignment runs on. Thread `c` reads
+    the operand at `c + offset`, so the operand slice is `[lo + offset, hi + offset)` and its
+    width is `hi - lo` -- *not* the schedule's full channel extent, which is what a concatenated
+    axis (320 wide, from operands of 64/128/128) does not have.
     """
     out = env[buf].abs()
     dim = 1                       # 0 is the segment axis, always kept
     has_ch = False
     for i in idx:
-        if i == CH:
-            dim += 1              # the channel axis is kept; it is the thread index
+        if isinstance(i, Ch):
+            if window is not None:
+                lo, hi = window
+                start, length = lo + i.offset, hi - lo
+                if out.shape[dim] != length or start != 0:
+                    out = out.narrow(dim, start, length)
+            dim += 1
             has_ch = True
             continue
         out = out.select(dim, i)
@@ -81,7 +91,9 @@ def magnitude_sum(sched, env: dict[str, torch.Tensor]) -> float:
             continue
         total: torch.Tensor | None = None
         for term in a.terms:
-            parts = [_factor_tensor(env, f[0], f[1]) for f in term.factors]
+            extent = getattr(sched, "extent", 0)
+            window = getattr(a, "ch_range", None) or ((0, extent) if extent else None)
+            parts = [_factor_tensor(env, f[0], f[1], window) for f in term.factors]
             if not parts:
                 continue
             # Align ranks: a factor with no channel index is [seg] while one with CH is
@@ -99,16 +111,21 @@ def magnitude_sum(sched, env: dict[str, torch.Tensor]) -> float:
     return worst
 
 
-def ordering_bound(sched, env: dict[str, torch.Tensor]) -> float:
-    """The largest difference reordering this schedule's sums can produce.
+def max_factors(sched) -> int:
+    """Most multiplications in any single term."""
+    return max((len(t.factors) for a in sched.assigns for t in a.terms), default=1)
 
-    `2 * (depth - 1) * eps * max SUM|terms|`. Returns 0.0 for a depth-1 schedule, where there is
-    nothing to reorder and the bar is exact equality.
+
+def ordering_bound(sched, env: dict[str, torch.Tensor]) -> float:
+    """The largest difference re-associating this schedule's arithmetic can produce.
+
+    `2 * (depth - 1 + factors) * eps * max SUM|terms|`. The `factors` term is not decoration: a
+    depth-1 assignment has nothing to *sum* but still multiplies, and `coeff * (a * b)` may round
+    differently from `(coeff * a) * b` or contract into an FMA. Without it the bound was exactly
+    0.0 for single-term assignments and fired on a correct kernel differing by 1.11e-16.
     """
     depth = reduction_depth(sched)
-    if depth <= 1:
-        return 0.0
-    return 2.0 * (depth - 1) * EPS * magnitude_sum(sched, env)
+    return 2.0 * (depth - 1 + max_factors(sched)) * EPS * magnitude_sum(sched, env)
 
 
 def assert_within_bound(name: str, got: torch.Tensor, want: torch.Tensor,
@@ -132,4 +149,5 @@ def assert_within_bound(name: str, got: torch.Tensor, want: torch.Tensor,
     return err
 
 
-__all__ = ["EPS", "reduction_depth", "magnitude_sum", "ordering_bound", "assert_within_bound"]
+__all__ = ["EPS", "reduction_depth", "max_factors", "magnitude_sum", "ordering_bound",
+           "assert_within_bound"]
