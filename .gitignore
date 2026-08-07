@@ -12,3 +12,4 @@ fixtures/*.npz
 # REPORT.md. Raw run logs are not.
 bench/results/*.log
 slurm/logs/
+codegen/_generated/
