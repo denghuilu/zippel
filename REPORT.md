@@ -1209,6 +1209,49 @@ The trade is real and now informed: `cute.compile()` buys an explicitly compiled
 launch repeatedly, at the price of the cache. Whether the `@cute.jit` call path — which caches
 but re-enters dispatch per launch — is better is an open S2 question.
 
+### 8.5f S1c — the fused forward measured. Wall-clock criterion NOT met.
+
+The whole forward runs through 55 emitted kernels and matches the FP64 interpreter (energy
+1.303e-15 relative; every group live-out ≤ 1.1e-14). Measured against eager at an identical
+boundary — inputs on device, neighbour list built, energy produced:
+
+| fixture | dt | n | fused | spread | eager | **speedup** | peak fused | peak eager | **peak ratio** | launches |
+|---|---|---|---|---|---|---|---|---|---|---|
+| si_small | f32 | 4 | 52.8 ms | 0.65 % | 5.50 ms | **0.104×** | 808 MiB | 1125 MiB | **1.393×** | 55 / 224 |
+| si_small | f64 | 4 | 117.7 ms | 0.18 % | 5.86 ms | 0.050× | 1582 | 2217 | 1.401× | 55 / 225 |
+| si_medium | f32 | 3 | 1401.9 ms | 0.04 % | 49.99 ms | **0.036×** | 20 729 | 29 318 | **1.414×** | 55 / 248 |
+| si_medium | f64 | 2 | 3181.5 ms | 0.11 % | 75.25 ms | 0.024× | 41 420 | 58 602 | 1.415× | 55 / 263 |
+
+**The two axes disagree, and both results are stable.** Wall-clock is **0.036–0.107×** — the
+fused forward is 9× to 42× slower. Peak memory is **1.39–1.42× better**, and that ratio holds
+across a 27× change in problem size and both dtypes, which is the strongest evidence in the table
+that it is structural rather than incidental. Launches are 55 against eager's 224–263.
+
+**S1's wall-clock criterion is NOT met. S1 stays open.**
+
+**The hill, quantified.** The bet is about the *training step*, not the forward. Eager's full
+conservative step at si_medium fp32 is **311.63 ms** (§5, pinned protocol). Our fused **forward
+alone** is 1401.9 ms. So the forward must first fall below eager's entire fwd+bwd+dbwd — a
+**≈ 4.5× improvement** — before three-pass fusion is even in contention, and further still to
+win. That is the distance to cover, stated in the unit that matters rather than as a ratio
+against a forward-only comparator.
+
+**What the shape of the deficit says.** Fused cost per edge is constant — 5.482 µs at si_small,
+5.403 at si_medium — while eager's falls from 0.588 to 0.193 µs. The gap widens with size not
+because we degrade but because **eager amortises launch overhead and we have nothing to
+amortise**. At si_small eager's 224 launches are largely overhead (~25 µs each); at si_medium it
+becomes work-bound. **[measurement]**
+
+A pre-registered prediction was **refuted** here: I predicted si_medium would improve ~10× because
+occupancy rises from 3.5 % to 96 % of the GPU's thread slots. It got *worse*. Occupancy starvation
+is not the dominant term (D39), and the diagnosis moved to per-thread work — pursued in §8.5g.
+
+**Protocol deviation, recorded.** These are a **single-node `salloc`** measurement, n = 2–4 per
+configuration, not the pinned N = 5 multi-allocation protocol. Justified by the measured spread:
+**0.04–0.65 %**, against an effect of 10–28×. Reps 3–5 were cancelled as zero-information. The
+multi-allocation protocol resumes for any verdict-class table (D41). All results carry
+`provenance: salloc-compute-node` and `host: nid005562`.
+
 ### 8.6 Standing threads
 
 | thread | status |

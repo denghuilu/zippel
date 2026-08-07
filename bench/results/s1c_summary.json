@@ -1,0 +1,54 @@
+{
+  "provenance": "salloc-compute-node nid005562, single allocation, n=2-4 per config",
+  "note": "NOT the pinned N=5 multi-allocation protocol; see DECISIONS D41",
+  "configs": {
+    "si_medium_f32": {
+      "n": 3,
+      "fused_ms": 1401.902099609375,
+      "spread_pct": 0.03913140471990569,
+      "eager_ms": 49.99135971069336,
+      "speedup": 0.03565966533941487,
+      "peak_fused_mib": 20728.779296875,
+      "peak_eager_mib": 29318.39306640625,
+      "peak_ratio": 1.4143810711915,
+      "launches_fused": 55,
+      "launches_eager": 248
+    },
+    "si_medium_f64": {
+      "n": 2,
+      "fused_ms": 3181.509521484375,
+      "spread_pct": 0.11217466526973986,
+      "eager_ms": 75.24555206298828,
+      "speedup": 0.02365089639206281,
+      "peak_fused_mib": 41419.791015625,
+      "peak_eager_mib": 58602.45458984375,
+      "peak_ratio": 1.4148418703449481,
+      "launches_fused": 55,
+      "launches_eager": 263
+    },
+    "si_small_f32": {
+      "n": 4,
+      "fused_ms": 52.75787162780762,
+      "spread_pct": 0.6487054614229142,
+      "eager_ms": 5.498672008514404,
+      "speedup": 0.10422467470458313,
+      "peak_fused_mib": 807.5029296875,
+      "peak_eager_mib": 1124.8720703125,
+      "peak_ratio": 1.3930253736018277,
+      "launches_fused": 55,
+      "launches_eager": 224
+    },
+    "si_small_f64": {
+      "n": 4,
+      "fused_ms": 117.66689682006836,
+      "spread_pct": 0.17840428888708565,
+      "eager_ms": 5.860464096069336,
+      "speedup": 0.049805546457394295,
+      "peak_fused_mib": 1582.16748046875,
+      "peak_eager_mib": 2216.7958984375,
+      "peak_ratio": 1.4011132991942978,
+      "launches_fused": 55,
+      "launches_eager": 225
+    }
+  }
+}

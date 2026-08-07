@@ -799,3 +799,30 @@ Actions taken:
 meant adding a lock to the script that failed. Every later script started without one, and the
 guard did not exist anywhere it could be inherited from. A fix that lives in one call site is a
 patch; the provenance field survived because it was attached to the artifact instead.
+
+## 2026-08-07 — D41: S1c measured under a deliberate protocol deviation; S1 wall-clock NOT met.
+
+**Result.** Fused forward vs eager at an identical boundary: wall-clock **0.036–0.107×**, peak
+memory **1.39–1.42×**, launches 55 vs 224–263. The wall-clock criterion for S1 is **not met** and
+S1 stays open.
+
+**Deviation, and why it is defensible.** Measured on a single-node `salloc` (`nid005562`), n = 2–4
+per configuration, not the pinned N = 5 independent allocations. The pinned protocol exists to
+capture between-node and placement variance, which a single allocation cannot see. It is justified
+here by proportion: the measured within-node spread is **0.04–0.65 %** against an effect of
+**10–28×**. No plausible placement variance closes a 28x gap, and reps 3–5 would have cost ~1.5 h
+of compile to refine a number already stable to half a percent. They were cancelled as
+zero-information.
+
+**The deviation does not generalise.** Any verdict-class table — anything that decides the bet —
+returns to N = 5 independent allocations. The rule is that a single-node measurement is adequate
+only when the effect exceeds the unmeasured variance by orders of magnitude, which is exactly the
+condition that will *not* hold near a 1.0x crossover.
+
+**The hill, so the number is not read as a ratio in a vacuum.** Eager's full conservative training
+step at si_medium fp32 is 311.63 ms. Our fused *forward alone* is 1401.9 ms. Before three-pass
+fusion competes at all, the forward must drop below eager's entire fwd+bwd+dbwd: **≈ 4.5×**.
+
+**What remains true.** The memory ratio holds at 1.39–1.42x across a 27x size range and both
+dtypes. That is the axis the bet rides on, measured on the pass with the least to gain, and it is
+the one piece of the S1c result that is already favourable.
