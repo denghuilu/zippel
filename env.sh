@@ -17,7 +17,7 @@
 # Override the root with ZIPPEL_CACHE_ROOT if you really want a shared cache.
 
 export ZIPPEL_ROOT=/iopsstor/scratch/cscs/dlu/iclr/zippel
-export ZIPPEL_ENV=/iopsstor/scratch/cscs/dlu/envs/spir
+export ZIPPEL_ENV=/iopsstor/scratch/cscs/dlu/envs/zippel
 export ZIPPEL_CACHE_ROOT="${ZIPPEL_CACHE_ROOT:-$ZIPPEL_ROOT/.jit-cache}"
 
 export CUTE_DSL_CACHE_DIR="$ZIPPEL_CACHE_ROOT/cute_dsl"

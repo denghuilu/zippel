@@ -38,7 +38,7 @@ both were traced to a specific cause rather than left as "it didn't work":
 | Driver / CUDA | 590.48.01 / CUDA 13.1 (driver); torch built against CUDA 13.0 |
 | OS / arch | SLES 15 SP6, `aarch64` (Neoverse-V2), 288 cores, 856 GB RAM |
 | `nvcc` | **absent** and not required — CuTe DSL compiles through NVRTC/NVVM |
-| Env | conda `spir` at `/iopsstor/scratch/cscs/dlu/envs/spir`, Python **3.13.14** |
+| Env | conda `zippel` at `/iopsstor/scratch/cscs/dlu/envs/zippel`, Python **3.13.14** (cloned from `spir` and renamed, D34; results predating the rename were produced in the byte-identical `spir` env) |
 | torch | **2.13.0+cu130** | 
 | nvidia-cutlass-dsl | **4.5.2** (libs-base 4.5.2) |
 | fairchem-core | **2.11.0** (e3nn 0.6.0, ase 3.29.0) |

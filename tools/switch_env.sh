@@ -43,41 +43,20 @@ PY
 
     # 2. shebangs must point at the NEW prefix, or the clone is cosmetic
     echo "--- shebang audit ---"
-    stale=$(grep -rl "^#\!$OLD" "$NEW/bin" 2>/dev/null | wc -l)
+    # grep exits 1 when it finds nothing, and under `set -euo pipefail` that killed this script
+    # precisely when the audit PASSED -- a verification that failed on success. The braces
+    # matter: `grep || true | wc -l` parses as `grep || (true | wc -l)`, so wc never sees grep's
+    # output when grep succeeds. Group the fallback with the grep, then pipe.
+    stale=$({ grep -rl "^#\!$OLD" "$NEW/bin" 2>/dev/null || true; } | wc -l | tr -d '[:space:]')
     echo "  scripts still pointing at the old prefix: $stale"
     [ "$stale" -eq 0 ] || { echo "FAIL: clone did not rewrite shebangs"; exit 1; }
 
-    # 3. the GPU stack actually loads and runs, which is what D11 was worried about
+    # 3. the GPU stack actually loads and runs, which is what D11 was worried about.
+    #    Runs a FILE, not a heredoc: CuTe DSL reads decorated functions with
+    #    inspect.getsourcelines and rejects anything on stdin ("DSL does not support REPL mode").
     echo "--- CuTe DSL smoke ---"
     CUTE_DSL_CACHE_DIR="$ROOT/.jit-cache/cute_dsl_envcheck" \
-    PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT" "$NEW/bin/python" - <<'PY'
-import torch, cutlass, cutlass.cute as cute
-from cutlass import Int32
-from cutlass.cute.runtime import from_dlpack
-
-class Axpy:
-    @cute.jit
-    def __call__(self, mX: cute.Tensor, mO: cute.Tensor, n: Int32, stream):
-        self.kernel(mX, mO, n).launch(grid=[4, 1, 1], block=[256, 1, 1], stream=stream)
-    @cute.kernel
-    def kernel(self, mX: cute.Tensor, mO: cute.Tensor, n: Int32):
-        tidx, _, _ = cute.arch.thread_idx()
-        bidx, _, _ = cute.arch.block_idx()
-        i = bidx * 256 + tidx
-        if i < n:
-            mO[i] = mX[i] * mX[i]
-
-x = torch.randn(1024, device="cuda", dtype=torch.float32)
-o = torch.zeros_like(x)
-st = cutlass.cuda.default_stream()
-args = (from_dlpack(x, assumed_align=16), from_dlpack(o, assumed_align=16), Int32(1024), st)
-cute.compile(Axpy(), *args)(*args)
-torch.cuda.synchronize()
-err = (o - x * x).abs().max().item()
-print(f"  device={torch.cuda.get_device_name(0)}  max abs err={err:.3e}")
-assert err == 0.0, "CuTe DSL smoke test disagrees"
-print("  CuTe DSL OK")
-PY
+    PYTHONNOUSERSITE=1 PYTHONPATH="$ROOT" "$NEW/bin/python" "$ROOT/tools/_env_smoke.py"
 
     # 4. the whole suite, in the new env
     echo "--- pytest in the new env ---"

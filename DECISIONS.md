@@ -145,6 +145,10 @@ One dated line per deviation from the M1 work order: what changed, why.
   `slurm/bench.sbatch` now `cd`s to `${ZIPPEL_ROOT:-/iopsstor/scratch/cscs/dlu/iclr/zippel}`
   rather than relying on `SLURM_SUBMIT_DIR`, so a job submitted from anywhere lands in the repo.
 
+  *(Reversed by D34 on 2026-08-07 — the env is now `envs/zippel`. The reasoning below stood
+  until the rename was explicitly requested, and the "risks breaking the stack" concern was
+  answered by verification rather than by assertion.)*
+
   The conda environment keeps its name `spir` at `/iopsstor/scratch/cscs/dlu/envs/spir`: it was
   named by explicit instruction, renaming it is slow and risks breaking the working torch 2.13 /
   CuTe DSL stack, and nothing depends on its name matching the repo's. `ZIPPEL_ENV` points at it.
@@ -556,3 +560,43 @@ of a 264 s total whose other 97 % has since been removed; against the correct de
 **~41 % of schedule time, ≈ 28 s of dbwd's 68 s**. The backlog ruling was made on the wrong
 number and should be re-taken on this one — though at 28 seconds absolute, "don't gold-plate"
 still looks like the right answer, which is why this is a correction and not an appeal.
+
+
+## 2026-08-07 — D34: the conda env is renamed `spir` -> `zippel`, reversing D11.
+
+D11 declined this rename on three grounds: the name came from an explicit instruction, renaming
+is slow, and it "risks breaking the working torch 2.13 / CuTe DSL stack". The first is superseded
+by a later instruction from the same reviewer. The third was a real risk and was answered by
+measurement rather than by assertion.
+
+**Clone, not rename.** The env was created with `conda create -p <prefix>`, and a prefix env bakes
+its absolute path into shebangs and activation scripts under `bin/`. `mv` leaves `pip`, `f2py` and
+every console-script entry point pointing at a path that no longer exists — broken in a way that
+surfaces later and confusingly. `tools/switch_env.sh` does clone → verify → switch → cleanup, and
+the old env is not removed until the new one has run the full suite.
+
+Verification, all four checks green:
+
+| check | result |
+|---|---|
+| version-for-version | identical: py3.13.14, torch 2.13.0, cutlass-dsl 4.5.2, fairchem 2.11.0, e3nn 0.6.0, ase 3.29.0, vesin 0.6.1, cuequivariance 0.11.0 |
+| shebang audit | **0** scripts still pointing at the old prefix — the clone rewrote them, so it is a real env and not a cosmetic copy |
+| CuTe DSL compile-and-run | max abs err **0.000e+00** on GH200 — precisely D11's stated risk |
+| full pytest suite in the new env | green |
+
+**Numbers predating the rename are not invalidated and are not re-run.** The environments are
+byte-identical by construction and by the version check; only the prefix differs. REPORT's
+environment row names the current env and says so.
+
+`PLAN.md` is *not* rewritten: it records the env as it was created, with the rename noted inline.
+Editing a plan to match what later happened destroys the record of what was planned.
+
+Two bugs in the verification script itself, both worth noting because both were failures of the
+checker rather than the thing checked:
+
+1. `grep -rl ... | wc -l` under `set -euo pipefail` — grep exits 1 when it finds nothing, so the
+   script died **precisely when the audit passed**. A verification that fails on success.
+2. The CuTe DSL smoke test was a heredoc piped to `python -`, which fails with "DSL does not
+   support REPL mode, save the function to a file instead" — the same constraint that already
+   forced `codegen/emit.py` to write generated kernels to disk. Learned twice; it is now
+   `tools/_env_smoke.py`, a real file.

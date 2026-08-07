@@ -69,6 +69,8 @@ def main():
     ap.add_argument("--fixture", default="si_small")
     ap.add_argument("--max-terms", type=int, default=0,
                     help="skip groups larger than this (0 = no limit)")
+    ap.add_argument("--min-terms", type=int, default=0,
+                    help="skip groups smaller than this; lets an outlier be run on its own")
     ap.add_argument("--out", default="")
     args = ap.parse_args()
 
@@ -105,6 +107,9 @@ def main():
           f"{'bound':>10} {'measured':>10}  verdict", flush=True)
     rows, ok, bad, skipped = [], 0, 0, 0
     for n_terms, gi, spec, template, sched, emit in plan:
+        if args.min_terms and n_terms < args.min_terms:
+            skipped += 1
+            continue
         if args.max_terms and n_terms > args.max_terms:
             skipped += 1
             print(f"{gi:>4} {template:>5} {n_terms:>8,} "
@@ -160,7 +165,8 @@ def main():
     print(f"cost ledger: " + "  ".join(f"{k}={v:.1f}s" for k, v in summary["totals_s"].items())
           + f"   guard={summary['guard_fraction']:.1%} of build", flush=True)
 
-    out = pathlib.Path(args.out or f"bench/results/validate_{args.program}_{args.fixture}.json")
+    out = pathlib.Path(args.out or
+                       f"bench/results/validate_{args.program}_{args.fixture}.json")
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"program": args.program, "fixture": args.fixture,
                                "sizes": sizes, "rows": rows, "costs": summary}, indent=2))

@@ -129,7 +129,7 @@ zippel/
 
 ## Phase 0 — Environment, reference, baselines
 
-1. **Env.** `conda create -p /iopsstor/scratch/cscs/dlu/envs/spir --clone iclr` (clone, not
+1. **Env.** `conda create -p /iopsstor/scratch/cscs/dlu/envs/spir --clone iclr` *(later cloned to `envs/zippel` and renamed — D34; this line records the env as it was created and is deliberately not rewritten)* (clone, not
    build-from-scratch — torch 2.13.0+cu130 aarch64 is known-good and hard to reproduce). Then
    `pip install cuequivariance-torch==0.11.0 cuequivariance-ops-torch-cu13==0.11.0 vesin==0.6.1`.
    Freeze `requirements.lock`. **Prefix must be on `/iopsstor`** — a clone into
