@@ -728,3 +728,40 @@ Two consequences, and the second matters more.
 Evidence class of the original claim: **[correlation]** — a job died, a large number was
 available, and I joined them. Nothing was measured about *which* memory ran out. Exactly the
 pattern D32 exists to catch, one week and three instances later.
+
+## 2026-08-07 — D39: the S1c wall-clock deficit is occupancy starvation at si_small, and it makes a falsifiable prediction.
+
+The first S1c number is 0.110x — the fused forward is 9.1x slower than eager at si_small f32,
+while using 4x fewer launches and 1.39x less peak memory. Three axes disagreeing that sharply
+is a diagnosis waiting to be made, and it is available without a profiler. **[analysis, not
+measurement — the prediction below is what converts it]**
+
+A GH200 has 132 SMs x 2048 threads = 270 336 thread slots. The emitted kernels' thread counts:
+
+    template  kernels   threads (si_small)   occupancy
+    T1             22                9,576        3.5 %
+    T3              9                9,576        3.5 %   (two at 216 threads = 0.08 %)
+    T2             24            1,225,728       453 %    (saturated)
+
+**31 of 55 kernels leave 96.5 % of the GPU idle**, and two of them occupy less than a single SM.
+T1 maps one thread per segment element, which is the premise that lets it hold every trailing
+value in registers -- correct, and at 9 576 edges it asks a 270 000-slot machine to run 9 576
+threads. si_small is **28x too small** to fill this GPU under that mapping.
+
+**Falsifiable prediction, before the sweep reports it.** si_medium has 259 474 edges = **96 % of
+the machine's thread slots** under the same mapping. If occupancy starvation is the dominant
+term, the si_medium speedup must improve by close to an order of magnitude relative to si_small.
+If it does not, this diagnosis is wrong and the cost is elsewhere -- inlined loads, launch
+latency across 55 sequential kernels, or the unvectorised scalar bodies.
+
+Recorded before the answer arrives, because a diagnosis offered after the fact explains anything.
+
+Consequences either way:
+
+* If confirmed, T1's thread mapping is the S1 performance variant to write first -- multiple
+  segment elements per thread, or the trailing axes distributed where they are parallel -- and
+  it costs nothing in correctness because the schedule is unchanged.
+* The two 216-thread kernels are node-rooted reductions and are simply too small to launch
+  separately at any fixture size; they belong fused into a neighbour or run on a single block.
+* None of this touches the memory axis, which is already 1.39x favourable on the pass with the
+  least to gain.
