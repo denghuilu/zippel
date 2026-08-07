@@ -313,3 +313,56 @@ What this means for the selection rule (docs/templates.md): structure is worth e
 launches. The third arm -- a single fused kernel skipping zeros with channels on the warp -- is
 what T2 is, and the crossover will be re-measured against it once T2 exists rather than
 extrapolated now.
+
+## 2026-08-07 — D25: two-tier exactness policy, and every kernel ships its own bound.
+
+A generated kernel is checked against the FP64 interpreter at one of two tiers, decided by the
+emitter from the schedule, never by the person writing the test:
+
+* **T1 — bit-exact.** The schedule's sums are short and the emitter adds the same values in the
+  same order as the interpreter, so any nonzero difference is a codegen bug. Wigner chain:
+  0.000e+00 over 9 576 edges.
+* **T2 — bounded by reduction order.** A 128-wide channel contraction cannot match `einsum`
+  bitwise: the interpreter reduces blocked, the emitted kernel sequentially with FMA
+  contraction, and neither is more correct. The bound is `eps * sqrt(n) * scale` over the
+  kernel's deepest reduction. Certified rather than assumed: a naive *same-order* FP64
+  reference differs from the interpreter by the identical 1.554e-15, which is what proves the
+  discrepancy is ordering and not arithmetic.
+
+Mechanism, not convention: `emit_source` computes the bound from the reduction tree it just
+emitted and attaches it as kernel metadata, and the harness asserts `measured <= bound` for
+every emitted kernel automatically. A kernel cannot be added without a bound, and a bound
+cannot be loosened without changing the schedule that produced it.
+
+This is the precision contract arriving earlier than planned. It was to be a Phase 3 concern
+(mixed-precision policy per table row); T2 forced it at S1b because the honest bar stopped
+being "equal". Noted in REPORT.md.
+
+## 2026-08-07 — D26: resource estimators that gate routing must be upper bounds, or carry a falsification test.
+
+`Schedule.peak_live_values()` decides whether a group is emitted as T1 or refused. It counted
+only computed values and ignored the live-in elements each thread holds, reporting **128** for a
+group whose thread reads all 16 384 weight elements of a `[128,128]` Linear. The T1-refusal test
+did not catch it -- it failed by *not raising*, which is the signature of an estimator that is
+wrong in the permissive direction. Corrected, the SO(2) conv group needs 492 929 live scalars
+per thread, not the 3 329 first reported.
+
+Policy, generalising it: **any estimator whose value causes the compiler to route or refuse must
+be an upper bound by construction, or must ship a test that fails when it under-reports.** A
+precondition check that undercounts is worse than no check, because it converts "this will spill
+catastrophically" into "this is T1-eligible" and carries the authority of a measurement.
+
+Applies to `peak_live_values` (registers), the smem estimate, and the traffic model of D27 --
+which is why that one is calibrated against ncu rather than trusted.
+
+## 2026-08-07 — D27: the traffic estimator is the optimisation objective, and it is calibrated before it is used.
+
+D24 established that the FLOPs saved are not the mechanism -- the loads and stores avoided are.
+Its operational consequence is that Phase 2 needs a per-group **byte** model, not a term count:
+live-in bytes + live-out bytes + smem spill, per fusion group.
+
+That model becomes the objective for S2 grouping and for the later rematerialisation choice, so
+it is calibrated before it decides anything: measured against ncu DRAM traffic on the two
+kernels that already work (Wigner T1, radial T2), with the error logged. **±20 % or it is
+recalibrated before it drives any fusion or template decision.** An uncalibrated cost model that
+selects its own inputs is how a compiler talks itself into a bad schedule.

@@ -1,8 +1,9 @@
 # Phase 2 Work Order — CuTe DSL fused kernels
 
-**Status: DRAFT, awaiting review.** Drafted by me from the template taxonomy (`docs/templates.md`),
-D22/D23/D24, and the corrected fusion-group table. S1a complete; S1b has its first correct
-kernels. Nothing here is a commitment until reviewed.
+**Status: APPROVED with amendments, 2026-08-07.** Drafted from the template taxonomy
+(`docs/templates.md`), D22–D27, and the corrected fusion-group table. Amendments folded in:
+traffic model (§2 S1, §6), per-kernel error bounds (§5), S1/S2 comparators and acceptance
+(§2, §3), T3 scope (§2 S2).
 
 ---
 
@@ -32,6 +33,9 @@ beyond a small manual sweep, no benchmark website, no multi-GPU, no general dyna
 | D22 | SIMT small-tile emission; **no WGMMA design attempted** | FlashSO2's end-to-end 0.55×/0.46×/0.33× at lmax 4/6/8, diagnosed structural |
 | D23 | target the materialization contract, not kernel micro-efficiency | FlashSO2's own postmortem names it the only >10 % lever left |
 | D24 | structure pays *inside* one kernel, never by decomposing launches | `bench/template_crossover.py`: per-degree GEMMs lose 0.16–0.87× at every lmax; padding is *cheaper* than not padding |
+| D25 | two-tier exactness; every kernel ships its own ordering bound as metadata | T2 cannot be bit-exact against `einsum`; the bound is certified by a same-order reference |
+| D26 | estimators that gate routing are upper bounds by construction, or carry a falsification test | `peak_live_values` under-reported 128 for a group needing 16 384 registers, and the refusal test failed by *not raising* |
+| D27 | the per-group **byte** model is the optimisation objective, calibrated before it decides anything | D24's operational consequence: bytes are the mechanism, not FLOPs |
 
 D24 corrects D22's stated mechanism while leaving its decision intact. The zeros are not the
 binding cost — loads and stores are. That is why the templates elide zero *terms* inside a kernel
@@ -55,26 +59,57 @@ groups, 35 archetypes.
   in-group** — the latter live in other threads' registers, which is the only case that forces a
   barrier. 21 of 44 index-map-free forward groups fit T1; the rest are T2.
   Remaining: the `[E,9,256]` conv groups, and the multi-edge-per-CTA performance variant.
+* **S1t — traffic model (early, before grouping decisions).** A per-group byte estimator:
+  live-in bytes + live-out bytes + shared-memory spill. **Calibrated against ncu-measured DRAM
+  traffic on the two kernels that already work** (Wigner T1, radial T2), with the error logged.
+  **±20 %, or it is recalibrated before it drives any fusion or template decision** (D27). This
+  is the objective function for S2 grouping and for the later rematerialisation choice, so it is
+  not permitted to select its own inputs. Per D26 it is an upper bound by construction where it
+  can be, and carries a falsification test where it cannot.
 * **S1c — compose.** Drive the whole forward through emitted kernels, matching the interpreter
   end-to-end, then the reference block.
 
-**S1 exit:** forward correct end-to-end, plus a performance table against B1/B2/B3 at the Phase 3
-measured boundary. Parity target is FlashSO2's measured curve *for the rotation stage only*, and
-only where boundaries are made comparable — their numbers include the `x_node` gather and radial
-multiply, so a like-for-like comparison has to be constructed deliberately, not assumed (D24).
+**S1 exit:** forward correct end-to-end, plus a performance table.
+
+**S1 comparators, parity-or-better:**
+
+1. **Eager forward** at the Phase 3 measured boundary, same fixtures, same inputs.
+2. **FlashSO2's measured curve at the lmax=4 anchor**, run **in its own environment** rather than
+   quoted from its `RESULTS.md`. The anchor exists for exactly this comparison (D12) and is
+   forward-only. Boundaries must be made comparable before the numbers are: FlashSO2's timings
+   include the `x_node` gather and the radial multiply, so the comparison is constructed
+   deliberately and its boundary stated, never assumed (D24).
 
 ### S2 — jointly scheduled (E, F), adds T3
 
-Force is 290 ops, 115 acyclic groups, 78 archetypes. What S2 adds beyond S1 is the segment-rooted
-template: the edge→node scatter-add and the readout reduction, plus every transposed gather the
-VJP produces (the closure lemma turns each forward gather into a scatter-add and vice versa).
+Force is 290 ops, 115 acyclic groups, 78 archetypes. What S2 adds beyond S1 is **T3, the
+reduction-rooted template class**, which covers two things that look different and are not:
 
-Keep-vs-recompute for every intermediate shared between the E and F passes is logged in
+* **segment reductions** — the edge→node scatter-add, the readout, and every transposed gather
+  the VJP produces (the closure lemma turns each forward gather into a scatter-add);
+* **LayerNorm-class intra-feature reductions** — mean and variance over the channel axis.
+
+They belong to one class because both reduce along an axis the surrounding template treats as
+parallel, and both therefore force a group boundary today. That second kind is why the acyclic
+constraint fragments the radial MLP into five groups: `mean(x)` cannot fuse with the `x` it
+reduces. T3 is what merges them, so it is not only about scatter-add.
+
+Grouping decisions in S2 are made against the **calibrated traffic model** (S1t), not by op
+count. Keep-vs-recompute for every intermediate shared between the E and F passes is logged in
 `DECISIONS.md` as it is decided — that ledger is a Phase 2 deliverable, not bookkeeping.
 
-**S2 exit:** F matches autograd and the FP64 interpreter; equivariance, permutation and
-translation property tests re-run **on the generated kernels**, not only on the IR; finite-
-difference spot checks on F.
+**S2 acceptance:**
+
+1. **(E, F) correct at template-tier tolerances** — T1 groups bit-exact, T2 groups within their
+   emitted ordering bound (D25), asserted automatically per kernel.
+2. **No dense inter-stage store of the conv output.** This is the D23 lever stated as a
+   falsifiable condition rather than an aspiration: the `[E,9,256]` message tensor is 2.28 GiB at
+   si_medium and is exactly the "dense store that is never made". Verified two ways — the traffic
+   estimator must show it absent from the live-out set, **and** one ncu spot check must confirm
+   the measured DRAM traffic is consistent with its absence. Estimator agreement alone is not
+   evidence, since the estimator is our own artifact.
+3. Equivariance, permutation and translation property tests re-run **on the generated kernels**,
+   not only on the IR; finite-difference spot checks on F.
 
 ### S3 — full training step, T4 optional-if-time
 
@@ -98,12 +133,19 @@ interpreter, with `gradgradcheck` spot checks and one finite-difference leg thro
 
 Explicitly:
 
-* S1 forward correct end-to-end *and* timed against baselines at the measured boundary;
-* S2 (E, F) correct — autograd, interpreter, property tests on generated kernels, FD spot check;
+* S1 forward correct end-to-end *and* timed against both comparators (eager; FlashSO2 at the
+  lmax=4 anchor in its own env), parity-or-better;
+* S2 (E, F) correct at template-tier tolerances, **and** no dense inter-stage store of the conv
+  output — estimator plus one ncu spot check;
 * S3 reported as reached, partial, or blocked, **stated plainly either way**; it is not a gate
   condition;
 * green `pytest`, pasted into `REPORT.md`;
 * every deviation logged in `DECISIONS.md`, dated, one line each.
+
+**The Gate 2 table reports, for S1 and S2:** wall-clock against each comparator, **kernel launch
+counts**, and **peak memory versus eager**. Launches and peak memory are not secondary columns —
+they are the two axes on which joint compilation is supposed to differ from a per-operator stack,
+and a wall-clock-only table would hide a result on either.
 
 A clean negative result at Gate 2 — "the emitted kernels are correct and slower" — is a valid
 outcome and must be reported as such. The only failure mode is a fabricated or gamed positive.
@@ -157,6 +199,13 @@ loose tolerance:
   bound stays tight enough that a real error cannot hide under it: a wrong term or a missing
   barrier moves the result by O(1), not by an ulp.
 
+**Every kernel ships its own bound, as a mechanism rather than a convention (D25).** The emitter
+computes the ordering-error bound from the reduction tree it just emitted and attaches it to the
+generated module as metadata; the harness asserts `measured <= bound` for every emitted kernel
+automatically. A kernel cannot enter the suite without a bound, and a bound cannot be loosened
+without changing the schedule that produced it — which is the property that stops "the tolerance
+was widened" from ever being a quiet step.
+
 Precision-appropriate tolerances apply only to the fp32/bf16 performance variants.
 
 Property tests (rotation equivariance, permutation invariance, translation invariance) re-run on
@@ -173,6 +222,8 @@ path, so the oracle is shown to have discriminating power over kernels and not o
 | the 320-launch dbwd partition is launch-bound | S3 wall-clock dominated by launch overhead | this is what T4 exists for; if T4 does not land, report launch-bound as the finding |
 | register pressure forces T2 groups to split | more launches than the table predicts | re-measure and report the real count; the table is a planning artifact, and per §7 it ships with its guard |
 | the win is memory-only, not wall-clock | speedup inside jitter, peak memory clearly lower | that is a legitimate verdict — the go criterion is ≥1.5× on *either* axis |
+| the traffic model is wrong and picks bad groupings | calibration error >20 % against ncu on the two working kernels | recalibrate before it decides anything; it is gated on this by construction (D27), and until it passes, grouping stays op-count-based and says so |
+| T3 does not land, so LayerNorm stays fragmented | S2 group count near S1's, mean/var still splitting groups | report the fragmentation as the measured cost of the acyclic constraint; it bounds the fusion win rather than invalidating it |
 
 Blocked >~2 h on one issue: write the blocker into `REPORT.md`, move to the next independent
 task.
