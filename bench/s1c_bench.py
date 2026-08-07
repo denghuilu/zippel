@@ -136,6 +136,10 @@ def main():
     result = {
         "fixture": args.fixture, "dtype": args.dtype, "sizes": sizes,
         "host": socket.gethostname(), "slurm_job": None, "git_sha": sha,
+        # local-login-node runs cannot see between-node/placement variance and are DEVELOPMENT
+        # numbers, not verdict-table numbers; recorded so the two can never be confused later
+        "provenance": ("sbatch-exclusive" if __import__("os").environ.get("SLURM_JOB_ID")
+                       else "local-login-node"),
         # provenance: five allocations that silently disagreed about the partition would produce
         # a spread that looks like hardware variance and is not
         "max_volume": args.max_volume,
