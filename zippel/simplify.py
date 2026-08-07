@@ -179,14 +179,22 @@ def archetypes(prog: Program) -> dict[tuple, int]:
 
 
 def fusion_groups(prog: Program) -> list[list[str]]:
-    """Greedy producer-consumer fusion partition.
+    """Greedy producer-consumer fusion partition, constrained to stay schedulable.
 
     Fusable means: the consumer reads the producer's output, both live on the same segment
     axis, their trailing extents match (so one loop nest covers both), and the consumer does
     no gather or scatter (an index map re-maps the segment axis, which breaks the shared
     loop). A `scalar_map` is always fusable into its producer under those conditions.
 
-    Deliberately cheap and greedy: this is a Phase 2 *planning* estimate of how many kernel
+    **Acyclicity is a hard constraint, not a refinement.** Fusing an op into a group adds an
+    edge from each of its other producers' groups into that group, and if the group can already
+    reach one of them the result is two kernels each waiting on the other's output. The
+    unconstrained greedy version put 36 of 42 forward groups into such cycles -- LayerNorm is
+    the archetype, where `x - mean(x)` wants to fuse with `x` while `mean(x)` reduces `x` in a
+    group of its own. A partition with a cycle is not a launch count at all, so the check runs
+    before every merge and the merge is refused if it would close one.
+
+    Still deliberately cheap and greedy: a Phase 2 *planning* estimate of how many kernel
     launches a straightforward fusion pass would leave, not a scheduling decision.
     """
     def fusable(prod_name: str, cons: "Op") -> bool:
@@ -201,19 +209,52 @@ def fusion_groups(prog: Program) -> list[list[str]]:
 
     group_of: dict[str, int] = {}
     groups: list[list[str]] = []
+    succ: dict[int, set[int]] = {}          # producer group -> consumer groups
+
+    def reaches(start: int, goal: int) -> bool:
+        stack, seen = [start], {start}
+        while stack:
+            g = stack.pop()
+            if g == goal:
+                return True
+            for nxt in succ[g]:
+                if nxt not in seen:
+                    seen.add(nxt)
+                    stack.append(nxt)
+        return False
+
+    def merge_is_safe(target: int, op: "Op") -> bool:
+        """Would putting `op` in `target` close a cycle among groups?"""
+        for src in op.inputs:
+            g = group_of.get(src)
+            if g is None or g == target:
+                continue
+            if reaches(target, g):          # target already depends on g; g -> target closes it
+                return False
+        return True
+
+    def new_group(name: str) -> int:
+        groups.append([name])
+        succ[len(groups) - 1] = set()
+        return len(groups) - 1
+
     for name in prog.topo():
         op = prog.ops[name]
         target = None
         for src in op.inputs:
-            if src in group_of and fusable(src, op):
-                target = group_of[src]
+            g = group_of.get(src)
+            if g is not None and fusable(src, op) and merge_is_safe(g, op):
+                target = g
                 break
         if target is None:
-            groups.append([name])
-            group_of[name] = len(groups) - 1
+            target = new_group(name)
         else:
             groups[target].append(name)
-            group_of[name] = target
+        group_of[name] = target
+        for src in op.inputs:
+            g = group_of.get(src)
+            if g is not None and g != target:
+                succ[g].add(target)
     return groups
 
 

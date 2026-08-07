@@ -847,9 +847,9 @@ eSEN-sm (K4L2), FP32 sizing for peak-live bytes, no rematerialization and no fus
 
 | program | ops pre-CSE | post-CSE | paths | signatures | families | **archetypes** | **fusion groups** | peak GiB (si_small) | peak GiB (si_medium) |
 |---|---|---|---|---|---|---|---|---|---|
-| fwd | 106 | 101 | 193 | 48 | 45 | **35** | **42** | 0.23 | 6.03 |
-| force | 407 | 290 | 486 | 145 | 136 | **78** | **46** | 0.77 | 20.73 |
-| dbwd | 1221 | 903 | 1467 | 379 | 352 | **149** | **107** | 2.12 | 57.32 |
+| fwd | 106 | 101 | 193 | 48 | 45 | **35** | **48** | 0.23 | 6.03 |
+| force | 407 | 290 | 486 | 145 | 136 | **78** | **115** | 0.77 | 20.73 |
+| dbwd | 1221 | 903 | 1467 | 379 | 352 | **149** | **320** | 2.12 | 57.32 |
 
 Four progressively coarser groupings of the same ops, because they answer different questions:
 
@@ -862,7 +862,8 @@ Four progressively coarser groupings of the same ops, because they answer differ
   since a kernel loops over a path table;
 * **fusion groups** — kernel *launches* left after a cheap greedy producer–consumer fusion pass
   (fusable = consumer reads producer, same segment axis, matching trailing extents, no gather or
-  scatter on the consumer).
+  scatter on the consumer) **subject to the group graph staying acyclic** — see the correction
+  below, which is why this column is larger than the one first reported at Gate 1.
 
 Neither is a timing; the interpreter is an oracle, and no number here belongs in a performance
 table.
@@ -880,14 +881,30 @@ regenerate the same intermediates. The vocabulary holds throughout: every derive
 **The right unit is the emitter, not the kernel.** An earlier draft of this section read the 352
 as "far too many kernels to hand-write", which was the wrong frame: the compiler emits kernels,
 humans write emitters. Counting what an emitter must actually handle gives **149 archetypes** for
-dbwd, and a cheap greedy fusion pass leaves **107 launches**. Both are tractable for hand-guided
-Phase 2 emission in a way that 352 is not, and the collapse from 352 → 149 is exactly the VJP's
-doing: the transposes are structurally identical to one another and differ only in extents and
-slice tables, which is what the closure lemma predicts.
+dbwd. The collapse from 352 → 149 is exactly the VJP's doing: the transposes are structurally
+identical to one another and differ only in extents and slice tables, which is what the closure
+lemma predicts.
+
+**Correction — the fusion-group column reported at Gate 1 was not a valid launch count.** It read
+42 / 46 / 107; it is 48 / 115 / 320. The greedy pass merged an op into any group containing a
+fusable producer, without checking that the resulting *group* graph stayed acyclic. It does not:
+36 of 42 forward groups, 40 of 46 force groups and **101 of 107 dbwd groups** sat in dependence
+cycles, meaning pairs of kernels each waiting on the other's output. LayerNorm is the archetype —
+`x - mean(x)` fuses with `x`, while `mean(x)` reduces `x` into a group of its own, so the two
+groups point at each other. Such a partition cannot be scheduled at all, so 107 was not a
+pessimistic estimate of the launch count but an unachievable one. Constraining every merge to
+preserve acyclicity gives the corrected column, verified by a Kahn topological sort in
+`tests/test_ir_core.py`.
+
+This materially weakens the launch-count claim: dbwd is **320** launches, not 107 — three times
+worse, and only 2.8× below its 903 ops rather than 8.4× below. It does not change any measured
+number, any correctness result, or the archetype counts, which are what Phase 2's emitter effort
+scales with. Found while building the Phase 2 emitter, by noticing that a group's live-in was
+computed from that same group's output.
 
 For scale, eager issues roughly 3 500 CUDA kernels for one si_small training step (§5). The
-107 figure is not directly comparable — profiler-counted kernels include ones a single `aten` op
-expands into, and 107 is an unscheduled estimate rather than a measurement — but the order of
+320 figure is not directly comparable — profiler-counted kernels include ones a single `aten` op
+expands into, and 320 is an unscheduled estimate rather than a measurement — but the order of
 magnitude is the point, and it is the launch-bound axis that the small-fixture variance
 independently implicates. On memory, the 57.32 GiB unscheduled peak at si_medium is **not** directly
 comparable to eager's measured 38.13 GiB: our liveness model sums every live buffer with no

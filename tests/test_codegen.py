@@ -34,8 +34,11 @@ def wigner_group():
     simp = simplify(prog, keep=prog.outputs)
     inp, sizes = bind(block, batch, jd, CFG)
     env = run(simp, inp, sizes)
-    groups = sorted(fusion_groups(simp), key=len, reverse=True)
-    spec = analyze_group(simp, groups[1], name="wigner_chain")
+    # Select by content, never by position: the fusion partition is a compiler output and
+    # reordering it must not silently point this test at a different kernel.
+    groups = fusion_groups(simp)
+    wanted = next(g for g in groups if any(n.startswith("rot_") for n in g))
+    spec = analyze_group(simp, wanted, name="wigner_chain")
     return simp, spec, build_schedule(simp, spec), env, sizes
 
 

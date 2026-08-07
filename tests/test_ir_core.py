@@ -372,3 +372,49 @@ def test_repeated_operand_with_differing_slices_is_checked_per_position():
         [ContractionPath(1.0, "a,a->a", (0, 0),
                          ((slice(0, 3),), (slice(5, 8),)), (slice(0, 3),))])
     assert prog.type_of(y).sizes == (3,)
+
+
+def test_fusion_groups_are_schedulable():
+    """The group graph must be acyclic, or the partition is not a launch count.
+
+    The first version of `fusion_groups` merged an op into any group holding a fusable producer
+    without checking the group graph. LayerNorm breaks that: `x - mean(x)` fuses with `x` while
+    `mean(x)` reduces `x` into its own group, so the two groups each depend on the other. 101 of
+    107 dbwd groups were in such cycles, and the reported "107 launches" was unachievable rather
+    than merely optimistic.
+    """
+    from blocks.eso2_ir import build_dbwd, build_force, build_forward
+    from blocks.eso2_ref import BlockConfig
+    from zippel.simplify import fusion_groups
+
+    for build in (build_forward, build_force, build_dbwd):
+        prog, _ = build(BlockConfig())
+        simp = simplify(prog, keep=prog.outputs)
+        groups = fusion_groups(simp)
+
+        where = {n: i for i, g in enumerate(groups) for n in g}
+        succ = {i: set() for i in range(len(groups))}
+        for name, op in simp.ops.items():
+            for src in op.inputs:
+                if src in where and where[src] != where[name]:
+                    succ[where[src]].add(where[name])
+
+        indeg = dict.fromkeys(succ, 0)
+        for outs in succ.values():
+            for j in outs:
+                indeg[j] += 1
+        queue = [i for i, d in indeg.items() if d == 0]
+        visited = 0
+        while queue:
+            i = queue.pop()
+            visited += 1
+            for j in succ[i]:
+                indeg[j] -= 1
+                if indeg[j] == 0:
+                    queue.append(j)
+        assert visited == len(groups), (
+            f"{len(groups) - visited} of {len(groups)} groups are in a dependence cycle; "
+            "the partition cannot be scheduled as kernel launches")
+
+        # every op lands in exactly one group
+        assert sum(len(g) for g in groups) == len(simp.ops)
