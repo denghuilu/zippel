@@ -934,3 +934,23 @@ shown not to be always-on.
 Not yet known: whether the interleaving changes the measured cost of `cat_83` (8.1 ms) and
 `scatter_100` (4.1 ms). Together they are 0.9 % of the forward, so it will not move the S1c
 number; it is recorded as a correctness-of-guarantee fix, not a performance one.
+
+## 2026-08-07 — D45: artifacts record their generator's content hash, not a repo SHA.
+
+`EMITTER_SHA` — a SHA-256 over `emit.py`, `emit_tile.py`, `emit_reduce.py`, `schedule.py`,
+`tile.py`, `bounds.py` — is now required metadata on every generated kernel and is verified at
+load. A mismatch raises `MetadataMismatch` and refuses the artifact.
+
+**Why a content hash rather than the repo git SHA.** `bench/s1c_bench.py` already records a git
+SHA, and it is not sufficient: it misses uncommitted edits, which is the normal state during
+development, and it pins the whole repo rather than the generator. The concrete motivation is
+recent — the T3 emitter changed (D44's store interleaving) underneath an already-measured
+composition, and nothing in the pipeline would have noticed a `_generated/` file written by the
+previous version.
+
+**`interleaved_stores` is endorsed as a pattern, not a one-off.** When a fix changes emitter
+semantics, the bound keeps the *old* semantics checkable behind a flag rather than being
+rewritten to match the new one. That is what let the same function both certify the fixed emitter
+and continue to report the unfixed emitter as over budget — i.e. the evidence that the defect was
+real survives the fix. A bound silently updated to match new behaviour cannot do that, and the
+temptation to update it is strongest exactly when it has just fired.

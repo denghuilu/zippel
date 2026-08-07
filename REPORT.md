@@ -1035,6 +1035,16 @@ This is the L1/L3 verification architecture in miniature — cheap exact checks 
 bounded checks on values — arrived at here by having been bitten once at each layer rather than
 by design.
 
+**Silent spill is the performance-dimension analogue of a silent double-backward zero.** Both are
+correct by every oracle available and wrong by the guarantee: `cat_83` passed bit-exactness, the
+ordering bound, the type checker, the acyclicity guard and end-to-end composition while holding
+2 304 live scalars per thread and spilling to local memory, exactly as `Safeacos` returns correct
+values and correct first derivatives while its second derivative is wrong. Neither is detectable
+by asking "is the answer right"; both need a check on the property the artifact is supposed to
+*guarantee*. The guard-coverage argument now has a demonstrated instance on each axis —
+numerical (§8.5b) and performance (D44) — which is the strongest form of the case for having
+guards at all.
+
 ### 8.5c A calibrated traffic model, and an instrument blocker
 
 D24 established that bytes, not FLOPs, are the mechanism, so Phase 2's objective function is a

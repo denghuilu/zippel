@@ -31,7 +31,7 @@ import textwrap
 
 from codegen.bounds import inlined_live_upper_bound
 from codegen.emit import (DTYPE, GENERATED_DIR, REGISTER_BUDGET,
-                          build_kernel)
+                          build_kernel, emitter_sha)
 from codegen.schedule import Schedule, all_indices
 from zippel.ir import IndexType, Program
 
@@ -128,6 +128,7 @@ def emit_reduce_source(prog: Program, sched: Schedule, block: int = 128,
     """Emit a T3 kernel: one thread per segment element, gathers inlined, stores atomic."""
     spec = sched.spec
     dt = DTYPE[dtype]
+    _esha = emitter_sha()
 
     # Same precondition as T2, same reason. T3 inlines its live-ins too, so T1's
     # `peak_live_values` is the wrong bound here -- it counts hoisted loads and would refuse
@@ -234,6 +235,7 @@ SEGMENT = "{spec.segment}"
 #: The segment the grid iterates. Differs from SEGMENT exactly when this kernel scatters.
 DRIVING_SEGMENT = "{driving}"
 TEMPLATE = "T3"
+EMITTER_SHA = "{_esha}"
 REDUCTION_DEPTH = {max((len(a.terms) for a in sched.assigns), default=1)}
 EXACT = False
 SCATTERS = {scatter is not None!r}

@@ -17,7 +17,7 @@ import textwrap
 
 from codegen.bounds import inlined_live_upper_bound
 from codegen.emit import (DTYPE, GENERATED_DIR, REGISTER_BUDGET,
-                          build_kernel)
+                          build_kernel, emitter_sha)
 from codegen.tile import CH, Ch, TileSchedule
 from zippel.ir import IndexType, Program
 
@@ -64,6 +64,7 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
     spec = sched.spec
     dt = DTYPE[dtype]
     C = sched.extent
+    _esha = emitter_sha()
     depth = max((len(a.terms) for a in sched.assigns), default=1)
 
     # Register precondition. T1 has had one since S1a; T2 was written without, so a group that
@@ -186,6 +187,7 @@ TENSOR_ORDER = {tensors!r}
 #: group launched with the edge count segfaults, which is how this came to be declared.
 SEGMENT = "{spec.segment}"
 TEMPLATE = "T2"
+EMITTER_SHA = "{_esha}"
 REDUCTION_DEPTH = {depth}
 EXACT = False
 
