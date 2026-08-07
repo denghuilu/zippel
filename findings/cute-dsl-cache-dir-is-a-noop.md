@@ -43,9 +43,22 @@ run 2: JIT cache miss  module_hash=[2d2c2769…3d33a274]   compile_seconds=0.203
 files written to CUTE_DSL_CACHE_DIR: 0
 ```
 
-The **module hash is byte-identical across processes**, which rules out the other hypothesis
-outright: our emitted source carries no run-varying fingerprint. And `dump_cache_to_path`'s
-`JIT cache : dumping` line never appears, because the call is gated off before it.
+Three independent facts fall out of that one run, and it is worth listing them separately
+because they retire different hypotheses:
+
+1. **`JIT cache miss` on both runs, zero files written.** The cache is not being populated.
+2. **The module hash is byte-identical across processes** — `2d2c2769…3d33a274` both times. This
+   retires the *fingerprint hypothesis* outright: if our emitted source carried a run-varying
+   element (a temp path, a generated module name, a nonce, a timestamp), the hash would differ
+   and the cache would be missing for a reason that was our fault in a second, separate way. It
+   does not. Whatever else is wrong, our source is stable across runs — which is also a
+   non-obvious property of a code generator that writes files into a directory keyed by name, and
+   worth having confirmed rather than assumed.
+3. **`dump_cache_to_path`'s `JIT cache : dumping` line never appears**, so the write is not
+   failing — it is never attempted, because the call is gated off upstream.
+
+Fact 2 is what made fact 3 worth chasing. Had the hashes differed, the investigation would have
+stopped at "our fingerprint varies" and never reached the real gate.
 
 ## What was actually wrong, in order
 
