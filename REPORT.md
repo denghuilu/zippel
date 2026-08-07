@@ -1040,6 +1040,10 @@ by design.
 D24 established that bytes, not FLOPs, are the mechanism, so Phase 2's objective function is a
 per-group DRAM **byte** model (D27). It is calibrated before it decides anything.
 
+**[intervention]** throughout this subsection: the instrument was calibrated by changing the
+known traffic and observing the response, and the model corrected by changing the model and
+re-measuring.
+
 **Blocker: `ncu` and CUPTI are not installed on this system.** `nvidia-cuda-cupti-cu13` resolves
 only to a 0.0.1 stub and `libcupti.so` does not load. `dcgmi` is present, so the substitute is
 DCGM's `dram_active` counter. Being coarser, the *instrument* is calibrated first against
@@ -1091,10 +1095,10 @@ emitting a row, because **building** a schedule — not rendering it — is the 
 | 492 160 | 769 | 52.3 s |
 | 658 048 | 5 132 | 94.2 s |
 
-Fitted log-log: **t ~ volume^1.27 (R² 0.976)** against **t ~ terms^1.00 (R² 0.348)**. The
-constructor's cost tracks the dense index space it walks, not the sparse set of terms it keeps —
-so the sparsity pass that stops the *kernel* paying for structural zeros lets the *compiler* pay
-for them in full.
+Fitted log-log: **t ~ volume^1.27 (R² 0.976)** against **t ~ terms^1.00 (R² 0.348)**.
+**[correlation]** — cost *tracks* index-space volume. The mechanism inferred from this fit at the
+time (that the constructor's cost *is* the index walk) was wrong, and the correction is below;
+the fit itself stands.
 
 **Measured at dbwd scale, and it corrects an extrapolation published here an hour earlier.** That
 draft reasoned from "dbwd is 9× the forward" to 5 M- and 20 M-volume groups costing 21 minutes

@@ -506,3 +506,53 @@ Two things worth stating plainly:
    R^2 0.976 -- because bigger index spaces produce more assignments and the quadratic scan is in
    the assignment count. A tight fit to a plausible mechanism is not evidence for that mechanism,
    which is the same lesson as the DCGM constant, one layer up.
+
+## 2026-08-07 — D32: every causal attribution ships with its evidence class.
+
+Three times now a plausible mechanism has been inferred from a good fit and been wrong: the DCGM
+constant (a 0.4 % residual "confirming" a bandwidth that exceeded the device's peak), the
+schedule-cost attribution (R² 0.976 against index-space volume, 97 % of it actually a quadratic
+liveness scan), and the `math_dtype` claim (a residual plus a warning joined into a mechanism
+without varying anything). Each was caught, but only by someone going back to measure.
+
+**Law, applying to REPORT, `findings/` and `docs/`:** every causal claim carries its evidence
+class inline.
+
+| class | means | may be stated as |
+|---|---|---|
+| **[correlation]** | X and Y move together; nothing was varied or attributed | a correlation, and only that |
+| **[profile]** | cost or behaviour attributed to a named component by direct measurement | a mechanism, within what the profiler resolves |
+| **[intervention]** | the suspected cause was changed and the effect moved | a cause |
+
+**A correlation may ship only as a correlation, never as a mechanism.** "X is driven by Y" needs
+[profile] or [intervention]; with [correlation] the sentence must read "X tracks Y", and the
+mechanism must be named as unverified or omitted.
+
+This binds review as well as writing: a mechanism claim gets asked its evidence class before
+ratification. The three shipped documents that carry unlabelled mechanism sentences —
+REPORT §8.5c/§8.5d, `findings/traffic-model-calibration.md`, `docs/templates.md` — are relabelled
+retroactively.
+
+## 2026-08-07 — D33: the "never visit zero terms" evidence is retired; the principle is re-costed.
+
+D24's generalisation cited a pair of forward groups: one emitting 390 terms took 7.15 s to
+schedule while one emitting 321 took 0.77 s, offered as proof that cost follows the dense index
+space rather than the emitted terms.
+
+**That citation was an artifact and is withdrawn.** Those are *T2* term counts, and the work
+being timed is the **T1** schedule the constructor builds first for the register-budget check.
+Its term counts are 99 840 and 41 088 — a 2.4× ratio against a post-fix 3.2× time ratio (0.800 s
+vs 0.250 s). There was never a 9× anomaly to explain; I compared a count from one schedule
+against a build of another. [profile]
+
+**The principle survives, re-costed.** Post-liveness-fix, profiling g13 shows enumeration is now
+the dominant term: `_offset` 0.62 s and `_path_assignments` 0.51 s of 2.06 s, and `nonzero_masks`
+— which walks the whole index space once, before `build_schedule` walks it again — is 0.84 s,
+**41 %**. Fusing the two passes so masks are applied during enumeration would save up to that
+fraction of schedule construction. [profile]
+
+**Correcting the figure I reported.** I told review the change was worth "~3 %". That was 7.7 s
+of a 264 s total whose other 97 % has since been removed; against the correct denominator it is
+**~41 % of schedule time, ≈ 28 s of dbwd's 68 s**. The backlog ruling was made on the wrong
+number and should be re-taken on this one — though at 28 seconds absolute, "don't gold-plate"
+still looks like the right answer, which is why this is a correction and not an appeal.

@@ -67,7 +67,34 @@ groups, 35 archetypes.
   not permitted to select its own inputs. Per D26 it is an upper bound by construction where it
   can be, and carries a falsification test where it cannot.
 * **S1c — compose.** Drive the whole forward through emitted kernels, matching the interpreter
-  end-to-end, then the reference block.
+  end-to-end, then the reference block. **Includes minimal T3** — the edge gather, the edge→node
+  scatter-add, the readout reduction, and LayerNorm mean/var — i.e. exactly the reduction-rooted
+  kernels the forward needs and no more. *Full reduction-class generality remains S2.*
+
+  **Every forward group is assigned or refused, before measurement:**
+
+  | group | ops | verdict |
+  |---|---|---|
+  | 21 groups | — | **T1** — register-resident, built and validated |
+  | 18 groups | — | **T2** — cooperative tile, built and validated |
+  | g0 `evec_0` | edge[x:3], gathers `pos[src]`, `pos[dst]` | **T3 gather** |
+  | g35 `cat_83`, `rotin_84` | edge[m:9,c:256], gathers `x_node[src]`, `x_node[dst]` | **T3 gather** |
+  | g43 `scatter_100` | node[m:9,c:128], scatter-add by `dst` | **T3 scatter-add** |
+  | g47 `E_105` | graph[], scatter through an all-zeros index | **T3 segment reduction** |
+  | g5 `mean_9`, g9 `mean_18` | `c,c->` over 128 channels → edge scalar | **T3 intra-feature reduction** |
+  | g7, g11 `var/vareps/invstd` | same, plus `rsqrt` | **T3 intra-feature reduction** |
+  | g46 `rol1_104` | `i,oi->o` with output extent **1** — a reduction wearing a linear's clothes | **T3 intra-feature reduction** |
+
+  Nothing is refused. The five groups the census called "unassigned" are one class, not five
+  problems: `channel_axis` returned `None` for each because their *output* channel axis is rank-0
+  (or extent 1), which is the signature of a reduction rather than a missing template.
+
+  **Plan inconsistency, logged:** §2's S2 entry scopes T3 as an S2 deliverable, and S1's exit
+  requires the forward to run end-to-end. The forward cannot run end-to-end without four
+  index-mapped groups and five reduction groups. The two statements were written at different
+  times and cannot both hold; the resolution is the split above — S1 builds the instances the
+  forward needs, S2 builds the class. Recorded rather than silently reconciled, because it was a
+  planning error and the next one is likelier to be caught if this one is visible.
 
 **S1 exit:** forward correct end-to-end, plus a performance table.
 

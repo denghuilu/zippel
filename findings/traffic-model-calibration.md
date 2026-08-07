@@ -32,6 +32,8 @@ independent bandwidth measurement discriminate.
 
 ## What the model got wrong, three times
 
+**[intervention]** — each row below is a change to the model followed by a re-measurement, not an inference from fit quality (D32).
+
 | model | wigner_chain (T1) | radial_lin0 (T2) | radial_stage2 (T2) |
 |---|---|---|---|
 | charge every live-in in full | **−28.1 %** | +6.5 % | +5.7 % |

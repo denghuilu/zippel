@@ -137,11 +137,18 @@ throughput binding and compute idle, and with D23.
 **"Visit", not "emit" — the rule binds every layer that walks the index space.** The first
 statement of this rule said *emit*, and that turned out to be a loophole rather than a synonym.
 The kernel does not emit zero terms; the **compiler still walks them**, enumerating the dense
-index space and filtering afterwards. Measured, on the forward's groups: a group emitting 390
-terms takes 7.15 s to schedule while one emitting 321 takes 0.77 s, because the first walks a
-99 840-element index space and the second 41 088 — a 9× cost difference between two groups whose
-emitted output differs by 20 % (`bench/schedule_scaling.py`, REPORT §8.5d). Cost fits
-`volume^1.27` at R² 0.976 and `terms^1.00` at R² 0.348.
+index space once in `nonzero_masks` and again in `build_schedule`, filtering afterwards both
+times.
+
+**[profile]** Attributed by `cProfile`, not inferred: on forward g13, `_path_assignments` and
+`_offset` account for 1.13 s of a 2.06 s schedule build, and `nonzero_masks` — the first of the
+two walks — is 0.84 s, **41 %**. Fusing the passes so masks apply *during* enumeration is worth
+up to that fraction of schedule construction, ≈ 28 s of dbwd's 68 s whole-program time (D33).
+
+*An earlier version of this paragraph cited a 390-term group costing 9× a 321-term one. That
+citation is withdrawn: those are T2 term counts and the work timed was the T1 schedule built
+first for the register-budget check, whose counts are 99 840 and 41 088. There was no anomaly
+(D33).*
 
 So structural sparsity is a property the **whole pipeline** must honour, not an output property
 of the emitter: schedule enumeration, mask propagation, and kernel emission each walk the same
