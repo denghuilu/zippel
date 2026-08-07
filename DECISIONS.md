@@ -408,3 +408,36 @@ Rule, asserted in the harness rather than remembered: **index buffers come from 
 only floating-point values are synthetic.** A traffic measurement that cannot obtain real
 connectivity fails rather than silently substituting zeros -- an all-zeros index map is the
 best-case gather (perfect reuse, one line) and would flatter every scatter-add kernel S2 emits.
+
+## 2026-08-07 — D30: "near-linear schedule construction" is an S3 entry criterion. Measured 1.27; not yet met.
+
+The dbwd emission preflight stalled — 320 acyclic groups, fifteen minutes, not one row — so the
+question it was asked (does the AST-chunking fix hold at S3 sizes?) was answered by a different
+one: **schedule construction, not emission, is the scaling limit.** `bench/schedule_scaling.py`
+measures it.
+
+Cost is driven by the **dense index-space volume** the constructor walks, not by the sparse terms
+it emits. Fitting the forward's 8 measured groups log-log:
+
+    t ~ volume^1.27   R^2 0.976      <- mechanistic
+    t ~ terms^1.00    R^2 0.348      <- no relationship worth the name
+
+That is the finding in one line, and it is slightly embarrassing in the right way: the sparsity
+pass exists so the *kernel* does not pay for structural zeros, and the *compiler* pays for them
+in full. A group with 390 emitted terms takes 7.1 s while one with 321 takes 0.77 s, because the
+first walks a 99 840-element index space and the second 41 088.
+
+Absolute cost matters as much as the exponent. The largest forward group (658 048 volume, 5 132
+terms) takes **94 s** to schedule. Extrapolating at k = 1.27: a 5 M-volume dbwd group is ~21
+minutes, a 20 M-volume one ~2 hours. dbwd has 320 groups.
+
+**Entry criterion for S3, recorded now so it is not negotiated later:** schedule construction
+must be near-linear in index-space volume (k <= 1.2) *and* the whole dbwd program must schedule
+in bounded wall-clock. Currently k = 1.27 — marginally over — with the constant the larger
+problem.
+
+**Not fixing it yet, deliberately.** k = 1.27 is close enough to linear that the exponent does
+not demand a rewrite, and S1c/S2 do not touch dbwd. The fix direction, when it is needed, is to
+skip provably-zero regions *during* enumeration rather than filtering after it — the masks are
+already computed, they are simply applied too late. Doing that now would be gold-plating a path
+S2 does not take.

@@ -124,18 +124,36 @@ def main():
             print(f"{gi:>7} {pred:>12,} {terms:>12,} {dt:>9.3f}", flush=True)
 
         usable = [r for r in rows if r["terms"] > 0 and r["seconds"] > 1e-4]
-        if len(usable) >= 3:
-            xs = [math.log(r["terms"]) for r in usable]
-            ys = [math.log(r["seconds"]) for r in usable]
+
+        def fit(key):
+            """log-log slope and R^2 of seconds against `key`."""
+            xs = [math.log(r[key]) for r in usable if r[key] > 0]
+            ys = [math.log(r["seconds"]) for r in usable if r[key] > 0]
             n = len(xs)
+            if n < 3:
+                return None, None
             mx, my = sum(xs) / n, sum(ys) / n
-            denom = sum((x - mx) ** 2 for x in xs)
-            k = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / denom if denom else float("nan")
-            print(f"  empirical exponent  t ~ n^{k:.2f}   ({n} points)", flush=True)
-            payload["programs"][label] = {"rows": rows, "exponent": k,
-                                          "max_terms_built": max(r["terms"] for r in usable)}
-        else:
-            payload["programs"][label] = {"rows": rows, "exponent": None}
+            sxx = sum((x - mx) ** 2 for x in xs)
+            if not sxx:
+                return None, None
+            k = sum((x - mx) * (y - my) for x, y in zip(xs, ys)) / sxx
+            ss_tot = sum((y - my) ** 2 for y in ys)
+            ss_res = sum((y - (my + k * (x - mx))) ** 2 for x, y in zip(xs, ys))
+            return k, (1 - ss_res / ss_tot if ss_tot else float("nan"))
+
+        k_terms, r2_terms = fit("terms")
+        k_vol, r2_vol = fit("predicted")
+        if k_vol is not None:
+            # Both are reported because which one FITS is the finding: cost is driven by the
+            # dense index space the constructor walks, not by the sparse terms it emits.
+            print(f"  t ~ terms^{k_terms:.2f} (R^2 {r2_terms:.2f})   "
+                  f"t ~ volume^{k_vol:.2f} (R^2 {r2_vol:.2f})", flush=True)
+        payload["programs"][label] = {
+            "rows": rows,
+            "exponent_vs_terms": k_terms, "r2_vs_terms": r2_terms,
+            "exponent_vs_volume": k_vol, "r2_vs_volume": r2_vol,
+            "max_terms_built": max((r["terms"] for r in usable), default=0),
+            "max_volume_built": max((r["predicted"] for r in usable), default=0)}
 
     # profile the largest group actually built, for dbwd
     dbwd = payload["programs"].get("dbwd", {})

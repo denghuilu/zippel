@@ -1076,6 +1076,35 @@ partial L2 line reuse across a 648-byte per-edge stride, which compulsory-traffi
 cannot express. I stopped rather than tune two more constants into agreement — that would be
 fitting the objective to the kernel it is supposed to judge.
 
+### 8.5d Compiler cost: schedule construction is the scaling limit
+
+The Phase 2 emitter was preflighted at S3 sizes to check that the 48-term AST chunking holds.
+It does not get that far: the preflight ran fifteen minutes over dbwd's 320 groups without
+emitting a row, because **building** a schedule — not rendering it — is the limit.
+
+`bench/schedule_scaling.py` measures what drives it, over the forward's groups:
+
+| predicted volume | emitted terms | build |
+|---|---|---|
+| 41 088 | 321 | 0.77 s |
+| 99 840 | 390 | 7.15 s |
+| 492 160 | 769 | 52.3 s |
+| 658 048 | 5 132 | 94.2 s |
+
+Fitted log-log: **t ~ volume^1.27 (R² 0.976)** against **t ~ terms^1.00 (R² 0.348)**. The
+constructor's cost tracks the dense index space it walks, not the sparse set of terms it keeps —
+so the sparsity pass that stops the *kernel* paying for structural zeros lets the *compiler* pay
+for them in full. Extrapolated, a 5 M-volume dbwd group takes ~21 minutes to schedule and a
+20 M-volume one ~2 hours; dbwd has 320 groups.
+
+Recorded as an S3 entry criterion (D30) rather than fixed now: k = 1.27 is close enough to
+linear that the exponent does not demand a rewrite, S1c and S2 do not touch dbwd, and the fix —
+applying the zero-masks during enumeration instead of after — is well understood enough to defer
+without risk of it becoming unfixable.
+
+Per-kernel schedule / emit / compile wall-clock is recorded from here on (`codegen/costs.py`),
+with no analysis attached, so the compile-time column exists when it is asked for.
+
 ### 8.6 Standing threads
 
 | thread | status |
