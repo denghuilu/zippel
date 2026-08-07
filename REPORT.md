@@ -1000,6 +1000,32 @@ limitation: a rigorous worst-case bound is loose — measured errors are 0.2–0
 catches what actually goes wrong in generated code (a dropped term, a missing barrier, a
 transposed index, all O(1)) and is not a sub-ulp check.
 
+### 8.5c A calibrated traffic model, and an instrument blocker
+
+D24 established that bytes, not FLOPs, are the mechanism, so Phase 2's objective function is a
+per-group DRAM **byte** model (D27). It is calibrated before it decides anything.
+
+**Blocker: `ncu` and CUPTI are not installed on this system.** `nvidia-cuda-cupti-cu13` resolves
+only to a 0.0.1 stub and `libcupti.so` does not load. `dcgmi` is present, so the substitute is
+DCGM's `dram_active` counter. Being coarser, the *instrument* is calibrated first against
+`copy_` at known traffic: the raw counter reads a consistent −16 % against a 4.0 TB/s nameplate,
+and the fitted effective bandwidth is **4.777 TB/s** — not a fudge factor but the recovery of
+GH200's real HBM3e bandwidth, which my constant had wrong. Residual after the fit: **0.4 %**.
+
+Against that instrument, after four modelling corrections (full buffers → element fraction →
+32-byte sectors → 128-byte L2 lines, each forced by measurement — `findings/traffic-model-calibration.md`):
+
+| template | worst error | D27 gate |
+|---|---|---|
+| T2 (dense channel access) | **2.8 %** | **OPEN** |
+| T1 (sparse strided reads) | **26.9 %** | **CLOSED** |
+
+The gate is per-template, because a single verdict would either forbid the well-supported T2 use
+or permit the unsupported T1 one. Sparse strided reads are still under-predicted; the residual is
+partial L2 line reuse across a 648-byte per-edge stride, which compulsory-traffic accounting
+cannot express. I stopped rather than tune two more constants into agreement — that would be
+fitting the objective to the kernel it is supposed to judge.
+
 ### 8.6 Standing threads
 
 | thread | status |
