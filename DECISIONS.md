@@ -1046,3 +1046,36 @@ Staging subsumes transposition and the emitter enforces it: a staged operand is 
 transpose map, since all its reads go through smem and the cooperative load reads the original
 layout. Permuting it too would be a no-op on the arithmetic and a second, invisible difference
 between arms.
+
+## 2026-08-07 — D49: the factorial's reference values come from si_small, tiled to si_medium's extent.
+
+**The failure first.** The first fp32 factorial run died silently after printing its operand plan.
+No traceback, no non-zero exit visible, process gone — and I reported it as "still compiling" for
+the next twenty minutes, which was wrong and is the part worth recording. The SLURM allocation was
+alive; the host had 776 GB free at the time of inspection. The cause is that `zippel.interp.run`
+materialises **every intermediate of the whole program simultaneously**, and at si_medium's ~262 k
+edges a single `[E, 9, 256]` fp64 buffer is 4.8 GB against a few hundred live buffers. It was
+OOM-killed, which is exactly what a silent SIGKILL with no traceback looks like. A standalone
+repro confirmed the call does not finish in ten minutes. `bench/validate_groups.py` has always run
+the interpreter at **si_small**; nothing had ever run it at si_medium, so the limit was untested
+rather than known.
+
+**The fix.** si_medium shapes, launch extents and edge count are the real ones; the *values* come
+from the interpreter at si_small and are tiled up. `none`-segment buffers (all four weights) are
+segment-independent and used verbatim. Only the buffers this group touches are scaled — scaling
+the whole program is precisely what died.
+
+**Why it is sound here, stated as a limit rather than a reassurance.** The kernel has no
+data-dependent control flow and exploits no sparsity, so every thread does identical work whatever
+the values are and the timing is input-independent. The correctness bar is bit-equality between
+arms, which holds for any input at all. Tiling real values rather than sampling randoms keeps
+magnitudes realistic, so the ordering-bound check against the interpreter stays meaningful.
+**What this does not support is any claim about numerics at si_medium's true values, and none is
+made.** If a later measurement needs those, the interpreter needs to become streaming first.
+
+**Lesson, which is a repeat.** "A fix that lives in one call site is a patch" (D40) has a sibling:
+a *capability* exercised at only one scale is not known to work at another. The interpreter was
+load-bearing infrastructure that had only ever been run at the small fixture, and I scaled it up
+without checking. The monitor I armed watched for tracebacks and result lines — neither of which a
+SIGKILL produces — so it stayed silent through a dead job. **Filters must cover death, not just
+failure**: the next monitor watches process liveness, not only stdout.

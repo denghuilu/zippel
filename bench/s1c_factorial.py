@@ -93,6 +93,10 @@ An arm that is fast and wrong is not a result.
 si_medium only. The si_small regime check belongs with the post-adoption composition re-measure,
 not inside the factorial, so that the arms are compared at one problem size.
 
+Reference *values* come from the interpreter at si_small, tiled up to si_medium's edge count;
+si_medium shapes and launch extents are the real ones. See the comment at the tiling site for why
+that is sound for this bench and what it does not license.
+
     python bench/s1c_factorial.py
 """
 
@@ -152,10 +156,25 @@ def main():
     torch.manual_seed(0)
     jd = [j.to(torch.float64) for j in torch.load("blocks/Jd.pt", weights_only=False)]
     block = ESO2RefBlock(cfg).to("cpu", torch.float64)
-    batch = load_batch(args.fixture, "cpu", torch.float64, cfg, requires_grad=False)
     prog, _ = build_forward(cfg, gauss_coeff=block.gauss_coeff)
     simp = simplify(prog, keep=prog.outputs)
-    inputs, sizes = bind(block, batch, jd, cfg)
+
+    # Shapes from si_medium; *values* from si_small, tiled up. The CPU FP64 interpreter
+    # materialises every intermediate of the whole program at once, and at si_medium's ~262 k
+    # edges that is terabyte-scale -- the first attempt was OOM-killed with no traceback, which
+    # is exactly what a SIGKILL looks like. `validate_groups.py` has always run it at si_small.
+    #
+    # Legitimate here, and only here, because of what this bench actually asks. The kernel has no
+    # data-dependent control flow and exploits no sparsity, so every thread does identical work
+    # regardless of the values and the *timing* is input-independent. The correctness bar is
+    # bit-equality between arms, which holds for any input at all. Tiling real si_small values
+    # rather than sampling randoms keeps the magnitudes realistic, so the ordering-bound check
+    # against the interpreter stays meaningful. What this does NOT support is any claim about
+    # numerics at si_medium's true values -- and none is made.
+    batch_s = load_batch("si_small", "cpu", torch.float64, cfg, requires_grad=False)
+    inputs_s, sizes_s = bind(block, batch_s, jd, cfg)
+    batch_m = load_batch(args.fixture, "cpu", torch.float64, cfg, requires_grad=False)
+    _inputs_m, sizes = bind(block, batch_m, jd, cfg)
 
     groups = fusion_groups(simp, max_volume=10_000)
     gi = next(i for i, g in enumerate(groups) if "conv1_90" in g)
@@ -205,7 +224,28 @@ def main():
             "AB_both": (transpose, stage)}
 
     from zippel.interp import run
-    ref = run(simp, inputs, sizes)
+    import time
+    t0 = time.perf_counter()
+    small = run(simp, inputs_s, sizes_s)
+    print(f"\nreference: interpreter at si_small in {time.perf_counter() - t0:.1f} s; "
+          f"edge-segmented buffers tiled {sizes_s['edge']} -> {sizes['edge']} edges", flush=True)
+
+    def at_scale(buf: str, v: torch.Tensor) -> torch.Tensor:
+        """si_small values at si_medium's extent. `none`-segment buffers (the weights) are
+        segment-independent and used verbatim; per-edge buffers repeat to the target length."""
+        t = simp.type_of(buf)
+        if t.segment == "none":
+            return v
+        n = sizes[t.segment]
+        reps = -(-n // v.shape[0])
+        return v.repeat((reps,) + (1,) * (v.dim() - 1))[:n].contiguous()
+
+    # Only the buffers this group touches are scaled up -- scaling the whole program is what
+    # OOM-killed the first attempt.
+    needed = set(spec.live_in) | set(spec.live_out) | set(getattr(spec, "internal", ()))
+    ref = {b: at_scale(b, small[b]) for b in needed if b in small}
+    del small
+
     stream = cutlass.cuda.default_stream()
     # fp32 unit roundoff against an ordering bound derived at fp64; the schedule is identical, so
     # only the roundoff scales. Not a loosened tolerance -- the same bound at the right epsilon.
