@@ -127,12 +127,27 @@ Two facts, both against the density argument:
 
 So the rule is **not** "use a dense tile above some density". It is:
 
-> **Structure is worth exploiting only *inside* a single kernel, by never emitting the zero
+> **Structure is worth exploiting only *inside* a single kernel, by never *visiting* the zero
 > terms. It is never worth exploiting by decomposing into more launches or smaller tiles.**
 
 Which is exactly what T1 does and what T2 must do. The FLOPs saved are not the mechanism; the
 *loads and stores avoided* are — consistent with FlashSO2's postmortem, which found L1TEX issue
 throughput binding and compute idle, and with D23.
+
+**"Visit", not "emit" — the rule binds every layer that walks the index space.** The first
+statement of this rule said *emit*, and that turned out to be a loophole rather than a synonym.
+The kernel does not emit zero terms; the **compiler still walks them**, enumerating the dense
+index space and filtering afterwards. Measured, on the forward's groups: a group emitting 390
+terms takes 7.15 s to schedule while one emitting 321 takes 0.77 s, because the first walks a
+99 840-element index space and the second 41 088 — a 9× cost difference between two groups whose
+emitted output differs by 20 % (`bench/schedule_scaling.py`, REPORT §8.5d). Cost fits
+`volume^1.27` at R² 0.976 and `terms^1.00` at R² 0.348.
+
+So structural sparsity is a property the **whole pipeline** must honour, not an output property
+of the emitter: schedule enumeration, mask propagation, and kernel emission each walk the same
+index space and each must skip what is provably zero rather than discard it afterwards. The
+masks needed to do this are already computed — they are simply applied one layer too late
+(D30, scheduled as the first commit of S2).
 
 **What is still unmeasured.** The third arm — a single fused kernel with channels on the warp
 that skips zero terms — is T2 itself, so this table cannot yet say where a dense MMA tile beats

@@ -428,16 +428,30 @@ in full. A group with 390 emitted terms takes 7.1 s while one with 321 takes 0.7
 first walks a 99 840-element index space and the second 41 088.
 
 Absolute cost matters as much as the exponent. The largest forward group (658 048 volume, 5 132
-terms) takes **94 s** to schedule. Extrapolating at k = 1.27: a 5 M-volume dbwd group is ~21
-minutes, a 20 M-volume one ~2 hours. dbwd has 320 groups.
+terms) takes **94 s** to schedule.
+
+*Corrected after measuring dbwd:* I first extrapolated to 5 M- and 20 M-volume dbwd groups at ~21
+minutes and ~2 hours apiece, reasoning from "dbwd is 9x the forward". That was the wrong axis.
+dbwd's largest index space is **666 112**, essentially the forward's 658 048 — the growth is in
+group *count* (251 schedulable vs 44), not group size. Fitted on dbwd's own measurements,
+`t = 9.25e-7 * volume^1.40` (R^2 0.951) over a total volume of 7 747 454 gives a whole-program
+schedule time of **~19.6 min**, with 8.7 of those minutes in five groups. Wrong by about an order
+of magnitude, and wrong in the direction that would have justified more alarm than the situation
+warrants.
 
 **Entry criterion for S3, recorded now so it is not negotiated later:** schedule construction
 must be near-linear in index-space volume (k <= 1.2) *and* the whole dbwd program must schedule
 in bounded wall-clock. Currently k = 1.27 — marginally over — with the constant the larger
 problem.
 
-**Not fixing it yet, deliberately.** k = 1.27 is close enough to linear that the exponent does
-not demand a rewrite, and S1c/S2 do not touch dbwd. The fix direction, when it is needed, is to
-skip provably-zero regions *during* enumeration rather than filtering after it — the masks are
-already computed, they are simply applied too late. Doing that now would be gold-plating a path
-S2 does not take.
+**Fix timing, ruled: the first commit of S2, before any grouping search.** My original plan was
+to defer it as gold-plating. That is wrong for one specific reason: D28's operating rule says
+alternatives whose predicted traffic gap falls inside the uncertainty band get *emitted and
+timed* rather than modelled — which places schedule construction in the inner loop of a grouping
+search, where a 52-115 s build multiplies by the number of candidates considered. Deferring is
+cheap only while the constructor runs once per group.
+
+The fix: skip provably-zero regions *during* enumeration instead of filtering after. The masks
+are already computed and merely applied one layer too late. Acceptance is a re-run of
+`bench/schedule_scaling.py` meeting k <= 1.2 with the constant-factor improvement reported
+against today's table. S1c proceeds first, untouched.

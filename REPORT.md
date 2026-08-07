@@ -1094,13 +1094,31 @@ emitting a row, because **building** a schedule — not rendering it — is the 
 Fitted log-log: **t ~ volume^1.27 (R² 0.976)** against **t ~ terms^1.00 (R² 0.348)**. The
 constructor's cost tracks the dense index space it walks, not the sparse set of terms it keeps —
 so the sparsity pass that stops the *kernel* paying for structural zeros lets the *compiler* pay
-for them in full. Extrapolated, a 5 M-volume dbwd group takes ~21 minutes to schedule and a
-20 M-volume one ~2 hours; dbwd has 320 groups.
+for them in full.
 
-Recorded as an S3 entry criterion (D30) rather than fixed now: k = 1.27 is close enough to
-linear that the exponent does not demand a rewrite, S1c and S2 do not touch dbwd, and the fix —
-applying the zero-masks during enumeration instead of after — is well understood enough to defer
-without risk of it becoming unfixable.
+**Measured at dbwd scale, and it corrects an extrapolation published here an hour earlier.** That
+draft reasoned from "dbwd is 9× the forward" to 5 M- and 20 M-volume groups costing 21 minutes
+and 2 hours apiece. dbwd's groups are not bigger — its largest index space is **666 112** against
+the forward's 658 048 — there are simply 5.7× more of them (251 schedulable vs 44). The
+extrapolation assumed the wrong axis of growth and was wrong by roughly an order of magnitude.
+
+| | forward | force | dbwd |
+|---|---|---|---|
+| schedulable groups | 44 | 107 | 251 |
+| max index-space volume | 658 048 | 663 808 | 666 112 |
+| largest group build | 94.2 s | 92.0 s | 115.1 s (at 331 k volume) |
+| fitted exponent vs volume | 1.27 | — | **1.40** (R² 0.951) |
+| total volume, all groups | — | — | 7 747 454 |
+| **whole-program schedule time** | — | — | **≈ 19.6 min** |
+
+So dbwd schedules in about twenty minutes, not hours: tolerable, but with 8.7 of those minutes
+spent on five groups, and squarely in the way of D28's emit-and-time arm, which puts schedule
+construction inside a grouping search's inner loop.
+
+D30 records the dual entry criterion — exponent **and** whole-program bound. Neither half is met
+today (1.27–1.40 against ≤ 1.2). The fix, applying the zero-masks *during* enumeration rather
+than filtering after, is now scheduled as the **first commit of S2** rather than deferred, on the
+reasoning that a 52–115 s build multiplies once it sits in a search loop.
 
 Per-kernel schedule / emit / compile wall-clock is recorded from here on (`codegen/costs.py`),
 with no analysis attached, so the compile-time column exists when it is asked for.
