@@ -40,8 +40,10 @@ memory or an MMA atom; per-channel work stays in registers.
 
 The channel axis is *dense* — there is no structural sparsity in it, and 128 or 256 channels do
 not fit one thread's registers. Forcing T1 on such a group is the error the register budget
-exists to prevent: the radial MLP needs 641 live scalars per thread and the SO(2) conv needs
-3329, so T1 refuses both.
+exists to prevent: under T1 a per-edge 128→128 Linear puts the whole `[128,128]` weight in one
+thread's registers, and the SO(2) conv group needs **492 929** live scalars per thread. T1
+refuses both. Across the forward, **21 of 44** index-map-free groups fit the 168-register budget;
+the rest are T2.
 
 **Precondition:** a trailing axis of extent ≥ 32 that the group never contracts *and* never
 slices unevenly, so it can be split across threads without cross-lane traffic in the pointwise
@@ -78,7 +80,9 @@ directly, and it is the most speculative of the four.
 
 For a fusion group `G`, with
 
-* `R` = peak live scalars per thread if emitted as T1 (`Schedule.peak_live_values()`),
+* `R` = peak live scalars per thread if emitted as T1 (`Schedule.peak_live_values()`, which
+  counts loaded live-in elements as well as computed ones — an earlier version counted only the
+  latter and reported 128 for a group whose thread holds 16 384 weight elements),
 * `C` = the largest trailing axis never contracted within `G`,
 * `d` = structural density, emitted terms / dense terms (`n_terms / dense_term_count`),
 

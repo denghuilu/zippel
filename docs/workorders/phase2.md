@@ -48,10 +48,12 @@ groups, 35 archetypes.
 * **S1a — T1, register-resident.** *Done.* Wigner chain: 7 ops, 6 internal `[E,9,9]` buffers
   never stored, 356 terms at 54 % structural elision, 108 live scalars, **bit-exact** against the
   FP64 interpreter over 9 576 real edges.
-* **S1b — T2, cooperative tile.** The channel-carrying groups: radial MLP (`[E,128]`, two
-  Linear+LayerNorm+SiLU stages) and SO(2) conv (`[E,9,256]`). Channels distributed across the
-  warp, per-thread tile slice, cross-channel contractions through smem. **Bit-exact FP64 first,
-  performance variants after** — the S1a discipline.
+* **S1b — T2, cooperative tile.** *First kernels correct.* The channel-carrying groups: radial
+  MLP (`[E,128]`, Linear+LayerNorm+SiLU) and SO(2) conv (`[E,9,256]`). Channels on threads,
+  cross-channel contractions through gmem for live-ins and **shared memory for values produced
+  in-group** — the latter live in other threads' registers, which is the only case that forces a
+  barrier. 21 of 44 index-map-free forward groups fit T1; the rest are T2.
+  Remaining: the `[E,9,256]` conv groups, and the multi-edge-per-CTA performance variant.
 * **S1c — compose.** Drive the whole forward through emitted kernels, matching the interpreter
   end-to-end, then the reference block.
 
@@ -140,9 +142,21 @@ blocks/eso2_ref.py
 fairchem
 ```
 
-**Bit-exactness is the bar for a generated kernel in FP64**, not a tolerance: the schedule
-reorders no arithmetic relative to the interpreter, so any nonzero difference is a bug rather
-than rounding. Precision-appropriate tolerances apply only to the fp32/bf16 performance variants.
+**The bar depends on whether the reduction order matches**, and both forms are stronger than a
+loose tolerance:
+
+* **T1 — bit-exactness.** Its sums are short and the emitter adds the same values in the same
+  order as the interpreter, so any nonzero difference is a codegen bug. The Wigner chain meets
+  this at 0.000e+00.
+* **T2 — the reduction-order bound**, `eps * sqrt(n) * scale` for an n-term FP64 sum. A 128-wide
+  channel contraction cannot be bit-exact against `einsum`: the interpreter reduces in a blocked
+  order and the emitted kernel sequentially with FMA contraction, and neither is more correct.
+  Measured 1.55e-15 against a bound of 3.62e-15 — and confirmed to be *purely* ordering, because
+  a naive same-order FP64 reference differs from the interpreter by the identical 1.55e-15. The
+  bound stays tight enough that a real error cannot hide under it: a wrong term or a missing
+  barrier moves the result by O(1), not by an ulp.
+
+Precision-appropriate tolerances apply only to the fp32/bf16 performance variants.
 
 Property tests (rotation equivariance, permutation invariance, translation invariance) re-run on
 generated kernels at every stage. The planted-sign-flip falsification test extends to the emitted

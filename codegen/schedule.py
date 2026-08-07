@@ -218,12 +218,25 @@ class Schedule:
     def peak_live_values(self) -> int:
         """Max simultaneously-live scalar registers, by a single forward pass.
 
-        A value dies after its last read; live-outs never die. This is the register-pressure
-        number that decides whether a group is emittable as one kernel at all.
+        Counts **loaded live-in elements as well as computed ones**. `emit_source` hoists every
+        live-in element it needs to the top of the kernel, so those occupy registers from the
+        start; a version of this that counted only computed values reported 128 for a per-edge
+        128->128 Linear whose thread actually holds all 16 384 weight elements, and would have
+        let a hopelessly spilling kernel through the budget check it exists to enforce.
+
+        A value dies after its last read; live-outs never die.
         """
         outs = set(self.spec.live_out)
+        ins = set(self.spec.live_in)
+
         live: set[tuple[str, tuple[int, ...]]] = set()
-        peak = 0
+        for a in self.assigns:
+            for term in a.terms:
+                live.update(f for f in term.factors if f[0] in ins)
+            if a.source is not None and a.source[0] in ins:
+                live.add(a.source)
+
+        peak = len(live)
         for i, a in enumerate(self.assigns):
             live.add((a.target, a.index))
             peak = max(peak, len(live))
