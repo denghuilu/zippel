@@ -24,6 +24,7 @@ import pathlib
 import sys
 import textwrap
 
+from zippel.interp import _A, _B, _C
 from zippel.ir import IndexType, Program
 from codegen.schedule import Schedule, all_indices
 
@@ -68,7 +69,26 @@ def _fn_expr(fn: str, order: int, arg: str, dt: str) -> str:
     if fn == "cos":
         return f"cute.math.cos({arg})"
     if fn == "poly_envelope":
-        raise NotImplementedError("poly_envelope needs its order-specific polynomial (D16)")
+        # p(d) = 1 + a d^5 + b d^6 + c d^7, and its derivatives, zero for d >= 1. Written in the
+        # same Horner form as zippel/interp.py:_envelope so the two agree term for term rather
+        # than merely mathematically -- a differently-associated polynomial would round
+        # differently and the kernel would miss its own bound for no reason.
+        d = arg
+        if order == 0:
+            val = f"({dt}(1.0) + ({d})**5 * ({dt}({_A!r}) + ({d}) * ({dt}({_B!r}) + {dt}({_C!r}) * ({d}))))"
+        elif order == 1:
+            val = (f"({dt}({5 * _A!r}) * ({d})**4 + {dt}({6 * _B!r}) * ({d})**5 + "
+                   f"{dt}({7 * _C!r}) * ({d})**6)")
+        elif order == 2:
+            val = (f"({dt}({20 * _A!r}) * ({d})**3 + {dt}({30 * _B!r}) * ({d})**4 + "
+                   f"{dt}({42 * _C!r}) * ({d})**5)")
+        elif order == 3:
+            val = (f"({dt}({60 * _A!r}) * ({d})**2 + {dt}({120 * _B!r}) * ({d})**3 + "
+                   f"{dt}({210 * _C!r}) * ({d})**4)")
+        else:
+            raise NotImplementedError(f"poly_envelope order {order} (D16)")
+        # the cutoff is a select, not a branch: threads in a warp straddle d = 1
+        return f"({val} if ({d}) < {dt}(1.0) else {dt}(0.0))"
     raise NotImplementedError(f"no CuTe DSL lowering for scalar_map {fn!r}")
 
 
