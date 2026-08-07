@@ -274,3 +274,42 @@ Consequence for Phase 2: the deliverable is the **fusion partition**, not a fast
 peak-live of 6.03 / 20.73 / 57.32 GiB under a naive unscheduled order. Those stores are the
 target. A Phase 2 that produces a 1.05x rotation and materializes the same intermediates has
 missed the bet even if every kernel is fast.
+
+## 2026-08-07 — D24: D22's decision stands, its stated mechanism does not. Measured.
+
+D22 rejected a dense-MMA rotation and gave the reason as structural density: a dense tile "pays
+quadratically for the block-diagonal zeros", with lmax=2 at 3.4-13.7 % occupancy of an MMA tile.
+The template selection rule needs that as a *curve*, so `bench/template_crossover.py` measures it
+on GH200 -- batched `[E,nc,nc] @ [E,nc,C]`, E=65536, C=128, three strategies.
+
+    bf16          density   dense-pad   dense-exact   per-block   block wins by
+    lmax 2         13.7 %     0.263 ms      0.543 ms    1.002 ms          0.26x
+    lmax 4         16.1 %     0.362 ms      0.851 ms    2.218 ms          0.16x
+    lmax 8         10.5 %     1.236 ms      2.298 ms    5.809 ms          0.21x
+
+Two results, both against the density argument:
+
+1. **Decomposing the block-diagonal into per-degree GEMMs loses at every lmax** (0.16-0.87x).
+   Exploiting structure by *splitting launches* costs far more in small-GEMM efficiency than the
+   skipped zeros save.
+2. **Padding is cheaper than not padding.** At lmax=2 bf16 the padded tile does (16/9)^2 = 3.2x
+   the multiply-adds of the exact one and is 2.1x *faster*, because 16 is an MMA-friendly extent
+   and 9 is not. If the zeros were the binding cost this could not happen.
+
+So density does not predict dense-MMA cost at these extents, and D22's mechanism is wrong. The
+*decision* is unaffected -- it rests on FlashSO2's end-to-end measurement (0.55x/0.46x/0.33x),
+and their postmortem's actual diagnosis is not FLOPs but "the gather cannot become a bulk copy",
+"WGMMA fragment layouts fight coalescing", and L1TEX issue throughput as the top limiter. Their
+own words: "Idle compute today, but it caps any future compute-bound version" -- i.e. the zeros
+were explicitly *not* the binding cost, which I should have read more carefully before restating
+it as one.
+
+Not comparable, and deliberately not compared: these numbers measure a bmm on operands already
+materialized per edge, while FlashSO2's include the x_node gather and the radial multiply.
+Different measured boundaries.
+
+What this means for the selection rule (docs/templates.md): structure is worth exploiting only
+*inside* one kernel, by never emitting the zero terms (T1/T2), never by decomposing into more
+launches. The third arm -- a single fused kernel skipping zeros with channels on the warp -- is
+what T2 is, and the crossover will be re-measured against it once T2 exists rather than
+extrapolated now.
