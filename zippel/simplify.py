@@ -178,7 +178,33 @@ def archetypes(prog: Program) -> dict[tuple, int]:
     return out
 
 
-def fusion_groups(prog: Program) -> list[list[str]]:
+def op_volume(prog: Program, op: "Op") -> int:
+    """Index-space volume of one op: the number of scalar terms it would unroll to.
+
+    O(paths) arithmetic -- extents multiplied, never enumerated. Used as the width proxy for the
+    fusion cap, because compile time is quadratic in a group's term count (D35) and terms track
+    this volume closely.
+    """
+    import math
+
+    if op.kind == "scalar_map":
+        return math.prod(op.out_type.sizes or (1,))
+    total = 0
+    for p in op.paths:
+        specs, _ = p.parse()
+        extent: dict[str, int] = {}
+        for pos, j in enumerate(p.operands):
+            t = prog.type_of(op.inputs[j])
+            sl = p.slices_for(pos)
+            sizes = (tuple(len(range(*x.indices(f))) for x, f in zip(sl, t.sizes))
+                     if sl else t.sizes)
+            for ch, size in zip(specs[pos], sizes):
+                extent[ch] = size
+        total += math.prod(extent.values()) if extent else 1
+    return total
+
+
+def fusion_groups(prog: Program, max_volume: int | None = None) -> list[list[str]]:
     """Greedy producer-consumer fusion partition, constrained to stay schedulable.
 
     Fusable means: the consumer reads the producer's output, both live on the same segment
@@ -193,6 +219,13 @@ def fusion_groups(prog: Program) -> list[list[str]]:
     the archetype, where `x - mean(x)` wants to fuse with `x` while `mean(x)` reduces `x` in a
     group of its own. A partition with a cycle is not a launch count at all, so the check runs
     before every merge and the merge is refused if it would close one.
+
+    `max_volume` caps a group's index-space volume, refusing a merge that would exceed it.
+    **Fusion width is not free**: `cute.compile` costs `terms^1.97` (D35), so the widest forward
+    group -- 23 040 terms -- takes an extrapolated 109 minutes to compile, 13.7x the other 47
+    combined, in order to elide one `[E,9,256]` intermediate. Uncapped fusion maximises bytes
+    saved while ignoring what it costs to build. `None` keeps the historical behaviour, and the
+    Gate 1 group counts (48/115/320) are the uncapped numbers.
 
     Still deliberately cheap and greedy: a Phase 2 *planning* estimate of how many kernel
     launches a straightforward fusion pass would leave, not a scheduling decision.
@@ -210,6 +243,7 @@ def fusion_groups(prog: Program) -> list[list[str]]:
     group_of: dict[str, int] = {}
     groups: list[list[str]] = []
     succ: dict[int, set[int]] = {}          # producer group -> consumer groups
+    volume: dict[int, int] = {}             # group -> index-space volume so far
 
     def reaches(start: int, goal: int) -> bool:
         stack, seen = [start], {start}
@@ -236,20 +270,26 @@ def fusion_groups(prog: Program) -> list[list[str]]:
     def new_group(name: str) -> int:
         groups.append([name])
         succ[len(groups) - 1] = set()
+        volume[len(groups) - 1] = op_volume(prog, prog.ops[name])
         return len(groups) - 1
 
     for name in prog.topo():
         op = prog.ops[name]
         target = None
+        cost = op_volume(prog, op) if max_volume is not None else 0
         for src in op.inputs:
             g = group_of.get(src)
-            if g is not None and fusable(src, op) and merge_is_safe(g, op):
-                target = g
-                break
+            if g is None or not fusable(src, op) or not merge_is_safe(g, op):
+                continue
+            if max_volume is not None and volume[g] + cost > max_volume:
+                continue                     # would make the group too expensive to compile
+            target = g
+            break
         if target is None:
             target = new_group(name)
         else:
             groups[target].append(name)
+            volume[target] = volume.get(target, 0) + op_volume(prog, op)
         group_of[name] = target
         for src in op.inputs:
             g = group_of.get(src)
@@ -259,4 +299,5 @@ def fusion_groups(prog: Program) -> list[list[str]]:
 
 
 __all__ = ["cse", "dce", "simplify", "op_counts", "signatures",
-           "contraction_signatures", "kernel_families", "archetypes", "fusion_groups"]
+           "contraction_signatures", "kernel_families", "archetypes", "fusion_groups",
+           "op_volume"]

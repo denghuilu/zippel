@@ -634,3 +634,38 @@ criterion on it, and I made the constructor linear on that basis. The ledger now
 dominates schedule by **24x** (477.5 s vs 19.5 s) at forward scale. D30's criterion was aimed at
 the smaller of the two costs. It stands as written, but the S3 entry criterion that actually
 binds is compile time, and D30 should be read alongside this.
+
+## 2026-08-07 — D36: fusing a gather into a channel-heavy op inverts its template. The cap fixes a symptom of that.
+
+D35 framed wide groups as a compile-cost problem. Measuring the cap showed something sharper.
+
+    cap        groups   total emitted terms   largest group        predicted compile
+    none           48                36,832   23,040  (T3)                114.4 min
+    10,000         55                16,177    5,123  (T2)                  8.8 min
+
+Splitting **reduces total emitted terms by 56 %**. A pure compile-cost tradeoff would have left
+the term count alone and only changed how it was distributed. It does not, and the reason is the
+selection rule: *any* index map routes a group to T3, and T3 unrolls every trailing axis. So
+fusing the gather `cat_83` into `rotin_84` drags a `[E,9,256]` op out of T2 -- where 256 channels
+are parallel across threads -- into T3, where they are unrolled into 23 040 straight-line terms.
+
+**The fusion does not merely cost compile time; it forces a worse template.** That is a real
+defect in the selection rule as written (docs/templates.md 2): routing on "contains an index map"
+is correct about *why* T1/T2 cannot apply to the gather itself, and wrong to extend that verdict
+to every op fused alongside it.
+
+**For S1c: use `max_volume=10_000`.** It is the right decision for the wrong-ish reason -- it
+splits the group because the group is wide, not because the template inverted -- but it produces
+the correct partition here, and 8.8 minutes of whole-forward compile against 114 makes S1c
+measurable today.
+
+**For S2: the principled fix is a channel-parallel T3**, so a gather or scatter can keep the
+channel axis on threads instead of unrolling it. That is exactly the "full reduction-class
+generality" S2 already owns, and this is the concrete argument for why it is needed rather than
+merely tidy. Recorded now so S2 inherits the reason, not just the task.
+
+Caveat on the cap's metric: it caps *index-space volume*, which tracks emitted terms for T1 and
+T3 but overestimates for T2 by the channel extent, since T2's channel axis is symbolic. So the
+cap is conservative for T2 groups and cannot shrink a single op that is already wide --
+`conv1_90` alone is 655 744 volume and no cap splits it. Volume is a proxy, and where it is a bad
+one is written down rather than discovered later.

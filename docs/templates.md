@@ -89,6 +89,12 @@ For a fusion group `G`, with
 ```
 if G contains any index map (gather, scatter-add, or segment change):
     T3                              # the segment axis is re-mapped; no shared loop nest exists
+                                    # KNOWN DEFECT (D36): this verdict is correct for the gather
+                                    # itself and wrong to extend to ops fused alongside it --
+                                    # it drags a [E,9,256] op out of T2's channel-parallel form
+                                    # into T3's fully-unrolled one, 23,040 terms instead of
+                                    # 5,123. Mitigated in S1 by a width cap; fixed in S2 by a
+                                    # channel-parallel T3.
 elif R <= REGISTER_BUDGET:
     T1                              # everything fits; strictly the cheapest
 elif C >= 32:
