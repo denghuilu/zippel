@@ -1125,3 +1125,46 @@ instrument for the remaining 582 ms. `bench/s1c_issue_floor.py` will still be ru
 its per-arm traffic prediction is what makes this falsifiable — but its verdict branch "neither
 floor is within reach ... next instrument is ncu, not more of this" is the branch now expected to
 fire, and it was written before any of these numbers existed.
+
+## 2026-08-07 — D51: arm B loses by 2.6x. The pre-registered branch fires, and a prediction for AB is recorded before AB lands.
+
+    baseline      714.819 ms    --
+    A_transpose   582.023 ms    1.228x   (all four offending operands)
+    A_matched     709.056 ms    1.008x   (c1_w2a only -- the one B can stage)
+    B_smem      1 852.103 ms    0.386x   (c1_w2a staged, padded)   <- 2.59x SLOWER
+
+All four bit-equal to baseline, err 1.557e-06 against a 1.024e-03 bound. **The padded staging is
+correct**; the emitter change is validated even though the arm it enables loses. That distinction
+matters: B is a real measurement of staging, not a measurement of a broken staging.
+
+**The pre-registered branch fires**: *"`B` ≪ `A_matched`, padding confirmed → points at staging
+overhead (barrier + double-touch), not at any statement about sharing, which the disjoint-slice
+analysis has already settled. Consequence: staging is struck from the T2 rule rather than made
+conditional."* Struck. And the padding is what earns the right to say so — without D48 this number
+would have been a bank-conflict artefact and would have proved nothing.
+
+**Mechanism [static analysis], not yet measured.** 128.5 KiB of shared memory per block against
+~228 KiB per SM permits exactly **one block per SM**. At 128 threads per block that is 4 warps
+resident, where the unstaged kernel is register-limited at ~113 registers and fits several blocks.
+Staging therefore cuts occupancy by roughly 4-8x, and 1 137 ms of added cost against a 5.8 ms
+prize is the shape that predicts. Note this does not contradict D39's refutation of occupancy as
+the explanation for the *baseline's* cost: showing that raising occupancy does not help is not the
+claim that cutting it 8x cannot hurt. `ncu` would settle it and is already required by D50.
+
+**The deeper reason B was never going to win**, now visible in the numbers rather than argued:
+A_matched says the operand B can stage is worth **5.8 ms of the 132.8 ms** A recovers. The
+capacity limit of D48 and the value distribution point the same way — *the operands worth fixing
+are exactly the ones too large to stage*. B was competing for 4 % of the available prize while
+paying a whole-SM occupancy cost for it.
+
+### Prediction for AB_both, recorded before it is measured
+
+If the two levers are additive and independent, AB (transpose on `c1_w1a`, `c1_w1b`, `c1_w2b`;
+staging on `c1_w2a`) should land at
+
+    714.819 - (132.796 - 5.763) + 1 137.284  =  **1 725.1 ms**
+
+A result near that confirms the decomposition and means the arms measure separable effects.
+A large departure means the levers interact — most plausibly through occupancy, since transposing
+does not change smem use and so should not change the one-block-per-SM ceiling. Written now so the
+number lands into a frame rather than the reverse.
