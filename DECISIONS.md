@@ -1211,3 +1211,74 @@ cause still to find. The crash was the cheaper failure.
 The four measured arms are unaffected: their `TRANSPOSE` and their request coincide, and all four
 are bit-equal to baseline. `AB_both` re-runs alone, with `baseline` alongside it as the
 bit-equality reference and as a reproducibility check on the metadata change.
+
+## 2026-08-08 — D53: the factorial closes. Winner A_transpose 1.228x. My AB prediction failed, and my traffic model is refuted by its own baseline.
+
+    arm            ms      speedup   bit-equal to baseline
+    baseline    714.819    1.000x    (rerun 714.528 -- 0.041 % apart)
+    A_transpose 582.023    1.228x    yes      <- WINNER
+    A_matched   709.056    1.008x    yes
+    B_smem     1852.103    0.386x    yes
+    AB_both    2207.927    0.324x    yes
+
+All five bit-equal to baseline at err 1.557e-06 against a 1.024e-03 bound. Every arm is correct;
+the losses are real losses, not broken kernels. `714.8` ms is now measured three times across two
+harnesses and three compilations (D42's profiler pass, factorial run 1, factorial run 2).
+
+### 1. The AB prediction failed, by 28 %
+
+D51 recorded **1 725.1 ms** for AB on the assumption the levers are additive. Measured **2 207.9**
+— a miss of **+482.8 ms**. The levers interact, and *antagonistically*: transposing three operands
+**saves 132.8 ms on its own and costs 355.8 ms on top of staging**. A sign flip, not a magnitude
+error. My pre-registration named a `superadditive` cell and no antagonistic one, so this outcome
+had no home either — the second time this factorial has landed outside its own frame.
+
+It does not change the ruling. A_transpose wins standalone; AB only ever spoke to whether the two
+should combine, and the answer is emphatically no.
+
+### 2. The traffic model is refuted by the baseline it was built to explain
+
+The re-check predicts **5 611.8 ms** of traffic for a kernel measured at **714.8 ms**. The kernel
+beats its own floor by **7.9x**, which is impossible — a floor that the measurement beats is not a
+floor. It implies an effective 31.4 TB/s against 4.0 TB/s of HBM.
+
+Two compounding errors, both mine:
+1. **The four weights total 1.25 MB and live in a 60 MiB L2.** After the first CTAs they are not
+   HBM traffic at all. Charging them DRAM bandwidth was wrong from D42 onward — this is exactly
+   the mechanism D50 flagged, now quantified.
+2. **`reads` counts textual factor occurrences, not issued loads.** The emitter inlines each
+   factor at its use and NVRTC common-subexpression-eliminates within a basic block — which
+   `static_census`'s own docstring already says about `intra_thread_reuse`, and which I then
+   ignored when building a traffic count on the same quantity.
+
+`bench/s1c_issue_floor.py` now **refuses to attribute anything** when the baseline check fails,
+and prints the refutation instead of a verdict. The guard is the deliverable: it would have caught
+D42's 651 ms had it existed, because 651 ms was the same model with different bookkeeping.
+
+**So D42's 651-vs-714.8 agreement was coincidence after all** — the all-null branch's warning,
+arriving through the winner rather than through a null.
+
+### 3. What is actually established
+
+* **[intervention]** Thread-mapped axis innermost is worth **1.228x**, bit-exact, free, no
+  capacity limit, no barrier. **The layout requirement enters T2's default emission rule.**
+* **[intervention]** Shared-memory staging **loses by 2.6x alone and 3.1x combined**. **Struck
+  from the T2 rule**, not made conditional. D48's padding is what earns the right to say this.
+* **[static analysis]** Issue floor 10.2 ms at 100 % efficiency; the winner is **57x above it**,
+  and 14x above even a 25 %-efficiency reading. Not issue-bound.
+* **[refuted]** The traffic model. No attribution from it.
+
+**Neither static floor explains 582 ms, and one of the two is refuted outright.** Static analysis
+has now produced two numbers that looked like measurements and were properties of my bookkeeping
+(D30/D31, D33, and now this). `ncu` is no longer parked, deferred, or a convenience — it is the
+only remaining instrument, and the next rung.
+
+### 4. Sequencing
+
+Per the standing order: winner -> issue-floor re-check -> input-row staging. The first two are
+done. **The third is now questionable on this evidence**: per-edge input-row staging is the same
+smem mechanism that just lost by 2.6x, and the occupancy cost that plausibly explains that loss
+does not care whether the staged bytes are weights or input rows. It is not cancelled — the input
+rows are per-edge and much smaller, so the capacity arithmetic differs — but it should be preceded
+by the ncu run rather than launched blind into the same wall. Flagged for the reviewer's call
+rather than decided here.

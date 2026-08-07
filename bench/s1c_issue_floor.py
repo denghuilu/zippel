@@ -138,6 +138,39 @@ def main():
               f"{r['ms']/issue_lo:>10.1f}x {str(r.get('bitwise_equal_to_baseline')):>7} "
               f"{r['status']:>8}")
 
+    # A floor the measurement beats is not a floor. Check the model against the one arm whose
+    # answer is already known from two independent runs before letting it attribute anything.
+    if "baseline" in rows and rows["baseline"]["measured_over_traffic"] < 1.0:
+        b = rows["baseline"]
+        implied = HBM_BYTES_PER_S / b["measured_over_traffic"] / 1e12
+        print(f"\n*** TRAFFIC MODEL REFUTED BY ITS OWN BASELINE ***")
+        print(f"  predicts {b['traffic_floor_ms']:.1f} ms for a kernel measured at "
+              f"{b['measured_ms']:.1f} ms -- {1 / b['measured_over_traffic']:.1f}x over, and a "
+              f"floor cannot be beaten.")
+        print(f"  It implies an effective {implied:.1f} TB/s against {HBM_BYTES_PER_S/1e12:.1f} "
+              f"TB/s of HBM. Two compounding errors, both mine:")
+        print(f"    1. the four weights total 1.25 MB and are L2-resident in a 60 MiB L2, so they "
+              f"are not HBM traffic at all after the first CTAs;")
+        print(f"    2. `reads` counts textual factor occurrences, not issued loads -- NVRTC "
+              f"common-subexpression-eliminates within a basic block (emit_tile.py:68-73).")
+        print(f"  No per-arm traffic attribution is made. The measured times stand on their own; "
+              f"the model does not, and is not used to interpret them.")
+        print(f"\n{'arm':>12} {'measured':>10} {'meas/issue':>11}")
+        for name, r in rows.items():
+            print(f"{name:>12} {r['measured_ms']:>9.1f}  {r['measured_over_issue']:>10.1f}x")
+        print(f"\nIssue floor {issue_lo:.1f} ms at 100 % efficiency; the fastest arm is "
+              f"{min(r['measured_over_issue'] for r in rows.values()):.0f}x above it, and "
+              f"{min(r['measured_over_issue'] for r in rows.values()) / 4:.0f}x above even a "
+              f"25 %-efficiency reading. **Neither floor is within reach and one of the two is "
+              f"refuted outright.** Next instrument is ncu, not more static analysis.")
+        out = pathlib.Path("bench/results/s1c_issue_floor.json")
+        out.write_text(json.dumps({"fixture": res["fixture"], "dtype": dtype,
+                                   "traffic_model": "REFUTED by baseline; not used",
+                                   "instr_per_thread": cen["instr_per_thread"],
+                                   "threads": cen["threads"], "arms": rows}, indent=2))
+        print(f"\nwrote {out}")
+        return
+
     if rows:
         win = min(rows, key=lambda k: rows[k]["measured_ms"])
         w = rows[win]

@@ -1,0 +1,44 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "traffic_model": "REFUTED by baseline; not used",
+  "instr_per_thread": 10246,
+  "threads": 33212672,
+  "arms": {
+    "baseline": {
+      "measured_ms": 714.8190307617188,
+      "traffic_floor_ms": 5611.8123371520005,
+      "issue_floor_ms": 10.172063835322925,
+      "measured_over_traffic": 0.12737757213108983,
+      "measured_over_issue": 70.27276296472691
+    },
+    "A_transpose": {
+      "measured_ms": 582.0228881835938,
+      "traffic_floor_ms": 340.297037312,
+      "issue_floor_ms": 10.172063835322925,
+      "measured_over_traffic": 1.7103378059973187,
+      "measured_over_issue": 57.21777778885878
+    },
+    "A_matched": {
+      "measured_ms": 709.0562744140625,
+      "traffic_floor_ms": 5084.660807168,
+      "issue_floor_ms": 10.172063835322925,
+      "measured_over_traffic": 0.13945006388911615,
+      "measured_over_issue": 69.70623522355753
+    },
+    "B_smem": {
+      "measured_ms": 1852.102783203125,
+      "traffic_floor_ms": 5076.158363136,
+      "issue_floor_ms": 10.172063835322925,
+      "measured_over_traffic": 0.36486308162752323,
+      "measured_over_issue": 182.07738500142116
+    },
+    "AB_both": {
+      "measured_ms": 2207.927001953125,
+      "traffic_floor_ms": 331.79459328,
+      "issue_floor_ms": 10.172063835322925,
+      "measured_over_traffic": 6.654499641258063,
+      "measured_over_issue": 217.05791840255705
+    }
+  }
+}
