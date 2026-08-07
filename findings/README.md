@@ -29,3 +29,4 @@ confirming the original reasoning if the two had not been separated.
 | `dense-mma-density-argument.md` | **MECHANISM CORRECTED** — D22 upheld, its stated cause replaced (D24) |
 | `traffic-model-calibration.md` | stands — what the traffic model predicts, and what it does not |
 | `dcgm-bandwidth-constant.md` | **MECHANISM CORRECTED** — the fit stays in service; it is not a bandwidth |
+| `compiled-ran-clean-wrong.md` | stands — my `invar_101` bug, and the three-codebase table for its failure class |

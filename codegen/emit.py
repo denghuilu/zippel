@@ -204,8 +204,25 @@ class Kernel:
 GENERATED_DIR = pathlib.Path(__file__).resolve().parent / "_generated"
 
 
-def build_kernel(source: str, name: str, directory: pathlib.Path | None = None):
-    """Write the emitted module, import it, and hand back its `Kernel` and tensor order."""
+#: Metadata every generated module must declare. These are the kernel's *contract*, checked at
+#: load rather than trusted: SEGMENT fixes the launch geometry, REDUCTION_DEPTH fixes the
+#: numerical bound, TEMPLATE and EXACT fix which correctness tier applies.
+REQUIRED_METADATA = ("TENSOR_ORDER", "SEGMENT", "TEMPLATE", "REDUCTION_DEPTH", "EXACT")
+
+
+class MetadataMismatch(RuntimeError):
+    """A generated module's declared contract disagrees with the schedule that produced it."""
+
+
+def build_kernel(source: str, name: str, directory: pathlib.Path | None = None,
+                 sched=None):
+    """Write the emitted module, import it, validate its contract, and return it.
+
+    Passing `sched` turns the module's metadata into a **checked** contract instead of a comment.
+    `SEGMENT` in particular is launch geometry: a node-rooted group launched with the edge count
+    reads past the end of every buffer and segfaults, so it belongs with TEMPLATE / DEPTH / EXACT
+    as something verified at load rather than remembered by the caller.
+    """
     directory = directory or GENERATED_DIR
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "__init__.py").touch(exist_ok=True)
@@ -218,7 +235,31 @@ def build_kernel(source: str, name: str, directory: pathlib.Path | None = None):
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module          # inspect.getsource needs it importable by name
     spec.loader.exec_module(module)
+
+    missing = [k for k in REQUIRED_METADATA if not hasattr(module, k)]
+    if missing:
+        raise MetadataMismatch(f"{name} declares no {', '.join(missing)}")
+
+    if sched is not None:
+        want_seg = sched.spec.segment
+        if module.SEGMENT != want_seg:
+            raise MetadataMismatch(
+                f"{name} declares SEGMENT={module.SEGMENT!r} but its group is rooted on "
+                f"{want_seg!r}; launching it would index a buffer with the wrong extent")
+        want_depth = max((len(a.terms) for a in sched.assigns), default=1)
+        if module.REDUCTION_DEPTH != want_depth:
+            raise MetadataMismatch(
+                f"{name} declares REDUCTION_DEPTH={module.REDUCTION_DEPTH} but its schedule has "
+                f"{want_depth}; the numerical bound would be computed for a different kernel")
+
     return module.Kernel, module.TENSOR_ORDER
 
 
-__all__ = ["emit_source", "build_kernel", "REGISTER_BUDGET", "GENERATED_DIR"]
+def load_metadata(name: str) -> dict:
+    """The declared contract of an already-built kernel."""
+    module = sys.modules[f"zippel_generated.{name}"]
+    return {k: getattr(module, k) for k in REQUIRED_METADATA}
+
+
+__all__ = ["emit_source", "build_kernel", "load_metadata", "REQUIRED_METADATA",
+           "MetadataMismatch", "REGISTER_BUDGET", "GENERATED_DIR"]

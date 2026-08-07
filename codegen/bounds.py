@@ -116,6 +116,34 @@ def max_factors(sched) -> int:
     return max((len(t.factors) for a in sched.assigns for t in a.terms), default=1)
 
 
+def term_magnitudes(sched, env: dict[str, torch.Tensor]) -> list[tuple[float, int, int]]:
+    """`(magnitude, assign index, term index)` for every term, largest first.
+
+    Used to choose *where* to plant a fault. Naive selection does not work: the first multi-term
+    assignment in the Wigner chain sums `-sin(0.g)` and `+cos(0.g)`, and the sine term is exactly
+    zero, so deleting it changes nothing and the resulting test passes vacuously. A fault has to
+    be planted somewhere it can actually be observed, and that is a measurable property.
+    """
+    out: list[tuple[float, int, int]] = []
+    extent = getattr(sched, "extent", 0)
+    for ai, a in enumerate(sched.assigns):
+        window = getattr(a, "ch_range", None) or ((0, extent) if extent else None)
+        for ti, term in enumerate(a.terms):
+            piece = None
+            for factor in term.factors:
+                tensor, has_ch = _factor_tensor(env, factor[0], factor[1], window)
+                if piece is not None and piece.dim() != tensor.dim():
+                    if piece.dim() < tensor.dim():
+                        piece = piece.unsqueeze(-1)
+                    else:
+                        tensor = tensor.unsqueeze(-1)
+                piece = tensor if piece is None else piece * tensor
+            if piece is not None:
+                out.append((float(piece.max()) * abs(term.coeff), ai, ti))
+    out.sort(reverse=True)
+    return out
+
+
 def ordering_bound(sched, env: dict[str, torch.Tensor]) -> float:
     """The largest difference re-associating this schedule's arithmetic can produce.
 
@@ -150,4 +178,4 @@ def assert_within_bound(name: str, got: torch.Tensor, want: torch.Tensor,
 
 
 __all__ = ["EPS", "reduction_depth", "max_factors", "magnitude_sum", "ordering_bound",
-           "assert_within_bound"]
+           "term_magnitudes", "assert_within_bound"]
