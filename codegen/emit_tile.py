@@ -15,7 +15,9 @@ from __future__ import annotations
 import itertools
 import textwrap
 
-from codegen.emit import DTYPE, GENERATED_DIR, build_kernel
+from codegen.bounds import inlined_live_upper_bound
+from codegen.emit import (DTYPE, GENERATED_DIR, REGISTER_BUDGET,
+                          build_kernel)
 from codegen.tile import CH, Ch, TileSchedule
 from zippel.ir import IndexType, Program
 
@@ -57,11 +59,22 @@ def _factor(prog: Program, buf: str, idx: tuple, from_smem: bool, live_in: set) 
     return _sym(buf, idx)
 
 
-def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32") -> str:
+def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
+                     budget: int = REGISTER_BUDGET) -> str:
     spec = sched.spec
     dt = DTYPE[dtype]
     C = sched.extent
     depth = max((len(a.terms) for a in sched.assigns), default=1)
+
+    # Register precondition. T1 has had one since S1a; T2 was written without, so a group that
+    # spilled would have done so silently -- luck, not a guard. The bound is the inlined-load
+    # form (codegen/bounds.py), an upper bound by construction per D26.
+    live = inlined_live_upper_bound(sched)
+    if live > budget:
+        raise ValueError(
+            f"group {spec.name} needs up to {live} live scalars per thread under T2, over the "
+            f"{budget} register budget -- it would spill to local memory. Split the group, or "
+            f"stage its operands rather than holding them.")
 
     tensors = [b for b in spec.live_in if not isinstance(prog.type_of(b), IndexType)]
     tensors += list(spec.live_out)

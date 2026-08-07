@@ -898,3 +898,39 @@ That is now reversed: no `Co-Authored-By` trailer on commits from this point.
 still governs, and rewriting ~40 commits to strip a trailer would destroy the immutable history
 it was protecting. So `git log` will show trailers up to `6d8d904` and none after, which is an
 abrupt discontinuity that would otherwise look like a mistake. This entry is why it is not.
+
+## 2026-08-07 — D44: T2/T3 register preconditions added. The guard's first run found two real spillers.
+
+T1 has had a register-budget precondition since S1a (`emit_source` refuses above 168 live
+scalars). T2 and T3 were written without one. A group that spilled would have done so silently:
+**luck, not a guard.**
+
+**Applying T1's bound unchanged would have been wrong.** `Schedule.peak_live_values` counts
+hoisted live-in loads, which is right for T1 and wrong for T2/T3 — both inline live-ins at their
+point of use, so a live-in occupies a register only across the expression that reads it.
+`cat_83` reads 4 608 live-in elements and needs nothing like 4 608 registers.
+`inlined_live_upper_bound` is the matched form, and remains an upper bound by construction (D26):
+no liveness *ordering* analysis, every value that could still be needed counted as live.
+
+**The guard immediately refused two kernels, correctly.** `cat_83` (bound 2 305) and
+`scatter_100` (1 153) — both T3, both working today, both spilling. `emit_reduce_source` emitted
+every assignment *before* any store, so a T3 thread producing a `[9,256]` output held 2 304 live
+scalars at once. That is a genuine defect the guard was built to catch, on a kernel that had
+passed every correctness test.
+
+**Fixed at the cause, not by widening the budget.** T3 now interleaves stores with production: a
+value that is a live-out and is never read again is stored the instant it exists, and dies. The
+bound takes `interleaved_stores` so it reflects the emitter's actual semantics rather than a
+convenient assumption — and with the un-interleaved setting it still correctly reports the old
+emitter as over budget, which is how the defect was found in the first place.
+
+After the fix, the highest bound among all 33 T2/T3 forward groups is **20**, against a budget of
+168.
+
+`tests/test_planted_faults.py` gains a parametrised fault per template, asserting refusal below
+the group's own requirement and successful emission at it — so the guard is shown to fire *and*
+shown not to be always-on.
+
+Not yet known: whether the interleaving changes the measured cost of `cat_83` (8.1 ms) and
+`scatter_100` (4.1 ms). Together they are 0.9 % of the forward, so it will not move the S1c
+number; it is recorded as a correctness-of-guarantee fix, not a performance one.

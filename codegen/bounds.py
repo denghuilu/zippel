@@ -125,6 +125,52 @@ def magnitude_sum(sched, env: dict[str, torch.Tensor],
     return worst
 
 
+#: Terms per emitted statement; must match CHUNK in the emitters.
+_CHUNK = 48
+
+
+def inlined_live_upper_bound(sched, interleaved_stores: bool = False) -> int:
+    """Upper bound on live scalars per thread for a template that INLINES its live-in loads.
+
+    T1 hoists live-ins into register symbols, so `Schedule.peak_live_values` counts them and is
+    the right bound there. T2 (`emit_tile.py`) and T3 (`emit_reduce.py`) inline each live-in at
+    its point of use, so a live-in occupies a register only across the expression that reads it
+    -- applying T1's bound to them would refuse kernels that work (`cat_83` reads 4 608 live-in
+    elements and needs nothing like 4 608 registers).
+
+    **Upper bound by construction (D26).** No liveness *ordering* analysis is performed --
+    every value that could still be needed is counted as live, because an estimator that gates
+    refusal must not be able to under-report.
+
+    `interleaved_stores` reflects an emitter that stores each output the moment it is produced
+    (T3, `emit_reduce.py`). Such a value is written and dies immediately, so only values that a
+    *later* assignment reads have to persist. Without it the bound counts all of them, which for
+    a `[9,256]` T3 output is 2 304 and refuses a kernel that needs almost no registers. With an
+    emitter that appends all stores at the end, the un-interleaved count is the honest one -- and
+    it correctly reported that those kernels were spilling before the interleaving landed.
+    """
+    later_use: dict[tuple, int] = {}
+    for i, a in enumerate(sched.assigns):
+        for t in a.terms:
+            for f in t.factors:
+                later_use[(f[0], f[1])] = i
+        if a.source is not None:
+            later_use[a.source] = i
+
+    out_bufs = set(getattr(sched.spec, "live_out", ()))
+    persist = 0
+    for i, a in enumerate(sched.assigns):
+        key = (a.target, a.index)
+        dies_at_once = (interleaved_stores and a.target in out_bufs
+                        and later_use.get(key, -1) <= i)
+        if not dies_at_once:
+            persist += 1
+
+    chunked = sum(1 for a in sched.assigns if len(a.terms) > _CHUNK)
+    widest = max((len(t.factors) for a in sched.assigns for t in a.terms), default=1)
+    return persist + chunked + widest + (1 if interleaved_stores else 0)
+
+
 def max_factors(sched) -> int:
     """Most multiplications in any single term."""
     return max((len(t.factors) for a in sched.assigns for t in a.terms), default=1)
@@ -246,5 +292,6 @@ def assert_within_bound(name: str, got: torch.Tensor, want: torch.Tensor,
 
 
 __all__ = ["EPS", "reduction_depth", "max_factors", "scalar_map_count",
+           "inlined_live_upper_bound",
            "output_magnitude", "magnitude_sum", "ordering_bound", "term_magnitudes",
            "assert_within_bound"]

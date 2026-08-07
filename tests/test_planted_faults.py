@@ -251,3 +251,51 @@ def test_wrong_reduction_depth_is_caught_at_load(forward):
     source = source.replace(f"REDUCTION_DEPTH = {depth}", f"REDUCTION_DEPTH = {depth + 7}")
     with pytest.raises(MetadataMismatch, match="REDUCTION_DEPTH"):
         build_kernel(source, "fault_wrong_depth", sched=sched)
+
+
+# ------------------------------------------------------------------------------------------
+# register-budget preconditions -- one per template
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("template", ["T2", "T3"])
+def test_register_budget_refuses_a_group_that_would_spill(forward, template):
+    """T2 and T3 must refuse an over-budget group, not emit a silently spilling kernel.
+
+    T1 has had this precondition since S1a. T2 and T3 were written without one, so a group that
+    spilled would have done so silently -- luck, not a guard. The guard's first run found two
+    real spillers: `emit_reduce_source` emitted every assignment before any store, so a T3 thread
+    producing a [9,256] output held 2 304 live scalars. That was fixed by interleaving stores
+    with production rather than by widening the budget.
+
+    The fault is planted in the *budget*, not the schedule: a real over-budget group would be a
+    fixture that changes whenever the block config does, whereas lowering the budget tests the
+    same code path deterministically.
+    """
+    from codegen.bounds import inlined_live_upper_bound
+    from codegen.compose import route
+    from codegen.emit_reduce import emit_reduce_source
+    from codegen.emit_tile import emit_tile_source
+
+    simp, env, sizes, groups = forward
+    picked = None
+    for g in groups:
+        spec = analyze_group(simp, g, name="probe")
+        t, sched, _ = route(simp, spec)
+        if t == template:
+            picked = (spec, sched)
+            break
+    assert picked is not None, f"no {template} group in the forward"
+    spec, sched = picked
+
+    interleaved = template == "T3"
+    need = inlined_live_upper_bound(sched, interleaved_stores=interleaved)
+    assert need <= 168, f"{template} probe group is already over budget at {need}"
+
+    emit = emit_tile_source if template == "T2" else emit_reduce_source
+    with pytest.raises(ValueError, match="register budget"):
+        emit(simp, sched, dtype="f64", budget=need - 1)
+
+    # and it emits fine at a budget that accommodates it -- the guard is not simply always-on
+    src = emit(simp, sched, dtype="f64", budget=need)
+    assert "def kernel" in src
