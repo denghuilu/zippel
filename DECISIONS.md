@@ -991,3 +991,58 @@ when a single-node number would mislead.
 
 Armed now rather than after the fact, so the trigger is not evaluated by someone who already
 knows the answer.
+
+## 2026-08-07 — D48: arm B's smem layout is padded, and the padding is pre-registered as load-bearing.
+
+Review caught that an unpadded direct-copy staging would have made **any** B reading
+uninterpretable. Slab-major layout puts thread `o` at `sh[o*T + rest]`. With `T = S` and `S` a
+multiple of 32 — every weight here is, `S` being 256 or 512 — bank `(o*S + rest) % 32` does not
+depend on `o`, so all 32 lanes of a warp hit **one bank**: a 32-way conflict. Numerically that is
+the *same factor of 32* the arm exists to remove, relocated from HBM into shared memory. B would
+have been paying the very cost it was testing.
+
+`T = S + 1` when `S` is even makes the stride odd. Odd numbers are units mod 32, so `o ↦ o·T mod
+32` is a bijection and every lane hits a distinct bank. Verified by emission: 1 bank unpadded, 32
+padded. Costs 0.4 % of the footprint. Padding over swizzle because one rule covers both widths —
+for f64 the access splits into two 16-lane phases and `2T mod 32` with `T` odd is likewise a
+bijection onto the 16 even banks; a swizzle would need a width-dependent XOR schedule to say the
+same thing.
+
+**Corollary added to the interpretation table**: with padding confirmed, `B ≈ A` remains the
+coalescing-dominant signature, and `B ≪ A_matched` points at **staging overhead** (barrier +
+double-touch), not at any statement about sharing — which the disjoint-slice analysis already
+settled.
+
+### Two further facts the design surfaced, both of which change the arms
+
+**1. B is capacity-limited and A is not, structurally.** At fp32 the two `c1_w1*` weights are
+512 KiB each — past any block's shared memory — so B cannot touch the two largest offenders at
+all. Even among the 128 KiB pair, two padded slabs are 257 KiB against a **measured 224 KiB**
+per-block ceiling (probed: 32/48/64/100/128/200/224 KiB all compile, launch and round-trip
+correctly, so the >48 KiB path needs no opt-in from us). B therefore stages **one** operand where
+A reaches four. That asymmetry is an argument for transpose as the default rule *independently of
+any timing*, and it means a raw `B < A` would be a statement about coverage, not mechanism.
+
+→ **A fifth arm, `A_matched`**: A restricted to exactly the operands B stages. `dB` is compared
+against `dA_matched`, never against the unrestricted `dA`. Without it the pre-registered
+`B ≪ A` rule would have been unreadable for a reason unrelated to either mechanism.
+
+**2. The factorial runs at fp32, not fp64.** D42 was measured and predicted in fp32; at fp64 the
+padded slabs double to 256 KiB and **arm B becomes vacuous** — nothing fits. The first draft of
+the bench computed footprints at fp32 while emitting fp64, which would have selected operands it
+could not then stage.
+
+### Correctness bar, strengthened
+
+Neither arm reorders arithmetic — a transpose is a pure layout change, staging a pure memory-path
+change; both evaluate the identical expression tree over identical values in identical order. So
+the bar is **bit-equality against the baseline arm**, not a tolerance. A wrong permutation, a
+wrong smem index or a missing barrier each move the result by O(1) and cannot survive it. Every
+arm is *also* checked against the FP64 interpreter within the ordering bound at fp32 unit roundoff
+(the same bound at the right epsilon, not a loosened one), which catches an error common to all
+arms that bit-equality between them cannot see.
+
+Staging subsumes transposition and the emitter enforces it: a staged operand is dropped from the
+transpose map, since all its reads go through smem and the cooperative load reads the original
+layout. Permuting it too would be a no-op on the arithmetic and a second, invisible difference
+between arms.

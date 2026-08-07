@@ -55,12 +55,75 @@ def _ref(prog: Program, buf: str, idx: tuple, transpose: dict | None = None) -> 
     return f"m_{buf}[{', '.join(coords)}]"
 
 
+#: Shared memory is 32 banks of 4 B. A stride that is a multiple of 32 words maps every lane of a
+#: warp onto one bank.
+SMEM_BANKS = 32
+#: Largest dynamic shared-memory allocation per block. Hopper's architectural ceiling is 227 KiB;
+#: 224 KiB is what was probed to compile, launch and round-trip correctly on this GH200.
+SMEM_CAP_BYTES = 224 * 1024
+
+
+def staged_layout(prog: Program, sched: TileSchedule, buf: str) -> dict:
+    """Padded shared-memory layout for a staged operand. **The padding is not an optimisation.**
+
+    A staged operand is laid out slab-major: thread `o` owns the `S` elements of its own slab at
+    `sh[o * T + rest]`. Take the direct copy, `T = S`. Every weight here has `S` a multiple of 32
+    (256 or 512), so lane `o` at step `rest` lands on bank `(o*S + rest) % 32 == rest % 32` -- the
+    *same* bank for all 32 lanes of the warp. That is a **32-way bank conflict**, serialising the
+    read into 32 phases: numerically the same factor of 32 as the uncoalesced global read arm B
+    exists to remove, merely moved from HBM into smem. Under it, any B reading -- null, weak, or
+    otherwise -- would be uninterpretable, because B would be paying the very cost it is testing.
+
+    So `T = S + 1` whenever `S` is even, making `T` odd. Odd numbers are units mod 32, so
+    `o -> o*T mod 32` is a bijection on the 32 lanes and every lane hits a distinct bank. For
+    64-bit elements the access splits into two 16-lane phases and `2*T mod 32` with `T` odd is
+    likewise a bijection of 16 lanes onto the 16 even banks. One rule covers both widths, which
+    is why padding is preferred here over a swizzle: a swizzle would need a width-dependent
+    XOR schedule to say the same thing.
+
+    Costs one extra element per thread -- 128 elements of 32 768, 0.4 %.
+    """
+    t = prog.type_of(buf)
+    p = _thread_axis(sched, buf)
+    sizes = list(t.sizes)
+    others = [k for k in range(len(sizes)) if k != p]
+    S = 1
+    for k in others:
+        S *= sizes[k]
+    T = S + 1 if S % 2 == 0 else S
+    # row-major strides *within a slab*, in the original axis order
+    slab_stride = {}
+    acc = 1
+    for k in reversed(others):
+        slab_stride[k] = acc
+        acc *= sizes[k]
+    return {"axis": p, "sizes": sizes, "others": others, "S": S, "T": T,
+            "slab_stride": slab_stride, "extent": sizes[p]}
+
+
+def _thread_axis(sched: TileSchedule, buf: str) -> int:
+    for a in sched.assigns:
+        for t in a.terms:
+            for f in t.factors:
+                if f[0] == buf:
+                    for k, i in enumerate(f[1]):
+                        if isinstance(i, Ch):
+                            return k
+    raise ValueError(f"{buf} is not indexed by the channel and cannot be staged slab-major")
+
+
+def _staged_ref(buf: str, idx: tuple, lay: dict) -> str:
+    """This thread's element of a staged operand: `sh[(c+off) * T + rest]`."""
+    slab = _ch_expr(idx[lay["axis"]])
+    rest = sum(int(idx[k]) * lay["slab_stride"][k] for k in lay["others"])
+    off = f" + {rest}" if rest else ""
+    return f"sh_{buf}[({slab}) * {lay['T']}{off}]"
+
+
 def _factor(prog: Program, buf: str, idx: tuple, from_smem: bool, live_in: set,
-            transpose: dict | None = None, staged: set | None = None) -> str:
+            transpose: dict | None = None, staged: dict | None = None) -> str:
     if staged and buf in staged:
-        # staged operands live in smem, indexed by the thread's own slice
-        flat = [i for i in idx if not isinstance(i, Ch)]
-        return f"sh_{buf}[{' + '.join(['c'] + [str(i) for i in flat]) if flat else 'c'}]"
+        return _staged_ref(buf, idx, staged[buf])
     if from_smem:
         # a cross-channel read has a literal channel coordinate; that is the smem index
         chan = [i for i in idx if not isinstance(i, Ch)]
@@ -98,8 +161,45 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
     tensors += list(spec.live_out)
     params = ", ".join(f"m_{b}: cute.Tensor" for b in tensors)
 
+    # Staging subsumes transposition: every read of a staged operand goes through smem, and the
+    # cooperative load reads the tensor in its original layout. Permuting it as well would be a
+    # no-op on the arithmetic and a second, invisible difference between arms.
+    staged = {b: staged_layout(prog, sched, b) for b in stage_shared}
+    transpose = {b: p for b, p in (transpose or {}).items() if b not in staged}
+    itemsize = 8 if dtype == "f64" else 4
+    smem_bytes = sum(lay["extent"] * lay["T"] * itemsize for lay in staged.values())
+    if smem_bytes > SMEM_CAP_BYTES:
+        raise ValueError(
+            f"staging {', '.join(staged)} needs {smem_bytes / 1024:.1f} KiB of shared memory, over "
+            f"the {SMEM_CAP_BYTES / 1024:.0f} KiB per-block cap -- the launch would fail. Stage "
+            f"fewer operands, or tile the staging.")
+
     live_in = set(spec.live_in)
     body: list[str] = []
+
+    # Cooperative load, once per block, before anything reads it. Outer loop walks slabs, inner
+    # loop walks the contiguous axis with consecutive lanes on consecutive elements: the global
+    # read is coalesced (which is the entire point of the arm) and the smem write lands on
+    # consecutive words, so the write is conflict-free as well as the read.
+    for b, lay in staged.items():
+        lead = [k for k in lay["others"][:-1]]
+        last = lay["others"][-1] if lay["others"] else None
+        body.append(f"o_{b} = Int32(0)")
+        body.append(f"while o_{b} < {lay['extent']}:")
+        for combo in itertools.product(*[range(lay["sizes"][k]) for k in lead]):
+            base = sum(v * lay["slab_stride"][k] for k, v in zip(lead, combo))
+            coords = {k: str(v) for k, v in zip(lead, combo)}
+            coords[lay["axis"]] = f"o_{b}"
+            coords[last] = f"r_{b}"
+            src = ", ".join(["0"] + [coords[k] for k in range(len(lay["sizes"]))])
+            dst = f"o_{b} * {lay['T']}" + (f" + {base}" if base else "") + f" + r_{b}"
+            body.append(f"    r_{b} = c")
+            body.append(f"    while r_{b} < {lay['sizes'][last]}:")
+            body.append(f"        sh_{b}[{dst}] = m_{b}[{src}]")
+            body.append(f"        r_{b} += {C}")
+        body.append(f"    o_{b} += 1")
+    if staged:
+        body.append("cute.arch.barrier()")
 
     def rhs_lines(a, uid: int) -> list[str]:
         target = _sym(a.target, a.index)
@@ -112,7 +212,7 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
             return [f"{target} = {dt}(0.0)"]
         parts = []
         for t in a.terms:
-            fs = " * ".join(_factor(prog, b, ix, sm, live_in, transpose, set(stage_shared))
+            fs = " * ".join(_factor(prog, b, ix, sm, live_in, transpose, staged)
                             for b, ix, sm in t.factors)
             parts.append(fs if t.coeff == 1.0 else
                          (f"-({fs})" if t.coeff == -1.0 else f"{dt}({t.coeff!r}) * {fs}"))
@@ -177,15 +277,22 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
             body.append(f"{_ref(prog, buf, idx)} = {_sym(buf, idx)}")  # outputs never transposed
 
     smem_decls = "\n".join(
-        f"        s_{b} = smem.allocate_tensor({dt}, cute.make_layout({C}), 16)"
-        for b in sched.staged)
+        [f"        s_{b} = smem.allocate_tensor({dt}, cute.make_layout({C}), 16)"
+         for b in sched.staged]
+        + [f"        sh_{b} = smem.allocate_tensor({dt}, "
+           f"cute.make_layout({lay['extent'] * lay['T']}), 16)"
+           for b, lay in staged.items()])
     indented = textwrap.indent("\n".join(body), " " * 12)
 
     return f'''"""Generated by codegen/emit_tile.py from fusion group {spec.name} (template T2).
 
 {spec}
   channel axis {sched.axis} of extent {C} on threads; {sched.n_values} values,
-  {sched.n_terms} terms. Staged through smem: {", ".join(sched.staged) or "(none)"}.
+  {sched.n_terms} terms. Cross-channel values staged: {", ".join(sched.staged) or "(none)"}.
+  Operands transposed: {", ".join(f"{b}{tuple(p)}" for b, p in transpose.items()) or "(none)"}
+  Operands staged in smem: {", ".join(f"{b}[{staged[b]['extent']}x{staged[b]['T']}]" for b in staged) or "(none)"}
+    ({smem_bytes / 1024:.1f} KiB, slab stride padded to an odd word count so the 32 lanes of a
+     warp land on 32 distinct banks rather than one)
   Internal buffers never stored: {", ".join(spec.internal) or "(none)"}
 """
 
