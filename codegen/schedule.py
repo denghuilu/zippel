@@ -236,13 +236,26 @@ class Schedule:
             if a.source is not None and a.source[0] in ins:
                 live.add(a.source)
 
+        # Bucket values by the step they die at, instead of rescanning the live set at every
+        # step. The rescanning version was O(assignments x live) and dominated the whole
+        # compiler: 257 s of a 265 s schedule build for one dbwd group, 4.5e8 dict lookups,
+        # while the index enumeration it was blamed on took 7.7 s. This is the same total work
+        # expressed once per value rather than once per value per step.
+        dies_at: dict[int, list] = {}
+        for key, step in self.last_use.items():
+            dies_at.setdefault(step, []).append(key)
+
         peak = len(live)
         for i, a in enumerate(self.assigns):
-            live.add((a.target, a.index))
+            key = (a.target, a.index)
+            live.add(key)
             peak = max(peak, len(live))
-            for key in [k for k in live if k[0] not in outs]:
-                if self.last_use.get(key, -1) <= i:
-                    live.discard(key)
+            # a value nothing ever reads is dead on arrival, unless it leaves the group
+            if key not in self.last_use and key[0] not in outs:
+                live.discard(key)
+            for dead in dies_at.get(i, ()):
+                if dead[0] not in outs:
+                    live.discard(dead)
         return peak
 
 

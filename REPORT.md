@@ -1115,10 +1115,28 @@ So dbwd schedules in about twenty minutes, not hours: tolerable, but with 8.7 of
 spent on five groups, and squarely in the way of D28's emit-and-time arm, which puts schedule
 construction inside a grouping search's inner loop.
 
-D30 records the dual entry criterion — exponent **and** whole-program bound. Neither half is met
-today (1.27–1.40 against ≤ 1.2). The fix, applying the zero-masks *during* enumeration rather
-than filtering after, is now scheduled as the **first commit of S2** rather than deferred, on the
-reasoning that a 52–115 s build multiplies once it sits in a search loop.
+**Profiled, and the cost was not where this section said it was.** `cProfile` on dbwd g210:
+`peak_live_values` 256.8 s of 265 s (97 %), `build_schedule` 7.7 s (3 %), 4.5×10⁸ `dict.get`
+calls. The liveness scan — the D26 register-budget precondition, run on every group — rescanned
+the whole live set at every assignment, making it quadratic in assignment count. Bucketing values
+by the step they die at makes it linear, in five lines.
+
+| | before | after |
+|---|---|---|
+| fwd g40 (658 048 volume) | 94.2 s | **7.2 s** |
+| dbwd g210 (331 136 volume) | 115.1 s | **2.8 s** |
+| exponent vs volume, fwd / force / dbwd | 1.27 / — / 1.40 | **0.97 / 0.96 / 1.01** (R² 0.99 / 0.97 / 0.99) |
+| whole-program dbwd | 19.6 min | **68 s** |
+
+**D30's dual criterion is met** — k ≤ 1.2 on all three programs, whole-program dbwd about a
+minute (D31).
+
+The index-space *correlation* reported above was real (R² 0.976) and the *mechanism* inferred
+from it was wrong: larger index spaces produce more assignments, and the quadratic scan was in
+the assignment count. A tight fit to a plausible mechanism is not evidence for that mechanism —
+the same lesson as the DCGM constant (§8.5c), one layer up. Applying the zero-masks during
+enumeration, which this section previously proposed and which was ruled into S2's first commit,
+is now measured to be worth ~3 %.
 
 Per-kernel schedule / emit / compile wall-clock is recorded from here on (`codegen/costs.py`),
 with no analysis attached, so the compile-time column exists when it is asked for.

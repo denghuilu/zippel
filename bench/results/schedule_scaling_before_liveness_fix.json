@@ -1,0 +1,249 @@
+{
+  "programs": {
+    "fwd": {
+      "rows": [
+        {
+          "group": 21,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 5.974300438538194e-05
+        },
+        {
+          "group": 24,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 3.119895700365305e-05
+        },
+        {
+          "group": 28,
+          "predicted": 2,
+          "terms": 2,
+          "seconds": 4.089402500540018e-05
+        },
+        {
+          "group": 18,
+          "predicted": 6,
+          "terms": 6,
+          "seconds": 6.55660405755043e-05
+        },
+        {
+          "group": 31,
+          "predicted": 6,
+          "terms": 6,
+          "seconds": 8.402898674830794e-05
+        },
+        {
+          "group": 33,
+          "predicted": 10,
+          "terms": 10,
+          "seconds": 0.00013903604121878743
+        },
+        {
+          "group": 2,
+          "predicted": 256,
+          "terms": 192,
+          "seconds": 0.0021655309828929603
+        },
+        {
+          "group": 32,
+          "predicted": 510,
+          "terms": 430,
+          "seconds": 0.003718635009136051
+        },
+        {
+          "group": 39,
+          "predicted": 512,
+          "terms": 2,
+          "seconds": 0.02284785604570061
+        },
+        {
+          "group": 44,
+          "predicted": 1152,
+          "terms": 9,
+          "seconds": 0.031316164997406304
+        },
+        {
+          "group": 4,
+          "predicted": 41088,
+          "terms": 321,
+          "seconds": 0.7732489829650149
+        },
+        {
+          "group": 13,
+          "predicted": 99840,
+          "terms": 390,
+          "seconds": 7.1473832839983515
+        },
+        {
+          "group": 36,
+          "predicted": 492160,
+          "terms": 769,
+          "seconds": 52.314417563029565
+        },
+        {
+          "group": 40,
+          "predicted": 658048,
+          "terms": 5132,
+          "seconds": 94.22198330599349
+        }
+      ],
+      "exponent": 1.238732405678046,
+      "max_terms_built": 5132
+    },
+    "force": {
+      "rows": [
+        {
+          "group": 21,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 8.322898065671325e-05
+        },
+        {
+          "group": 83,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 4.6846980694681406e-05
+        },
+        {
+          "group": 81,
+          "predicted": 2,
+          "terms": 2,
+          "seconds": 4.6685978304594755e-05
+        },
+        {
+          "group": 112,
+          "predicted": 3,
+          "terms": 3,
+          "seconds": 3.811100032180548e-05
+        },
+        {
+          "group": 20,
+          "predicted": 8,
+          "terms": 6,
+          "seconds": 8.687702938914299e-05
+        },
+        {
+          "group": 34,
+          "predicted": 10,
+          "terms": 10,
+          "seconds": 0.00014540302800014615
+        },
+        {
+          "group": 2,
+          "predicted": 256,
+          "terms": 192,
+          "seconds": 0.002095901989378035
+        },
+        {
+          "group": 55,
+          "predicted": 384,
+          "terms": 3,
+          "seconds": 0.04202465998241678
+        },
+        {
+          "group": 67,
+          "predicted": 768,
+          "terms": 3,
+          "seconds": 0.06070032698335126
+        },
+        {
+          "group": 14,
+          "predicted": 66048,
+          "terms": 258,
+          "seconds": 5.73503962601535
+        },
+        {
+          "group": 66,
+          "predicted": 492288,
+          "terms": 1923,
+          "seconds": 63.82349813898327
+        },
+        {
+          "group": 40,
+          "predicted": 663808,
+          "terms": 5168,
+          "seconds": 92.02372276200913
+        }
+      ],
+      "exponent": 1.2235261585694197,
+      "max_terms_built": 5168
+    },
+    "dbwd": {
+      "rows": [
+        {
+          "group": 21,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 5.855801282450557e-05
+        },
+        {
+          "group": 274,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 3.9901991840451956e-05
+        },
+        {
+          "group": 176,
+          "predicted": 2,
+          "terms": 2,
+          "seconds": 4.876701859757304e-05
+        },
+        {
+          "group": 92,
+          "predicted": 4,
+          "terms": 4,
+          "seconds": 5.135894753038883e-05
+        },
+        {
+          "group": 33,
+          "predicted": 10,
+          "terms": 10,
+          "seconds": 0.0001407630043104291
+        },
+        {
+          "group": 315,
+          "predicted": 64,
+          "terms": 64,
+          "seconds": 0.00035173300420865417
+        },
+        {
+          "group": 107,
+          "predicted": 384,
+          "terms": 3,
+          "seconds": 0.005523474013898522
+        },
+        {
+          "group": 27,
+          "predicted": 770,
+          "terms": 356,
+          "seconds": 0.004834119987208396
+        },
+        {
+          "group": 57,
+          "predicted": 1280,
+          "terms": 9,
+          "seconds": 0.04499730502720922
+        },
+        {
+          "group": 125,
+          "predicted": 41216,
+          "terms": 322,
+          "seconds": 0.8073969730176032
+        },
+        {
+          "group": 210,
+          "predicted": 331136,
+          "terms": 2587,
+          "seconds": 115.10223229095573
+        }
+      ],
+      "exponent": 1.3116159291788028,
+      "max_terms_built": 2587
+    }
+  },
+  "profile": {
+    "group": 210,
+    "terms": 2587,
+    "text": "         476042767 function calls (476042763 primitive calls) in 264.564 seconds\n\n   Ordered by: cumulative time\n   List reduced from 62 to 12 due to restriction <12>\n\n   ncalls  tottime  percall  cumtime  percall filename:lineno(function)\n        1    0.060    0.060  264.679  264.679 /iopsstor/scratch/cscs/dlu/iclr/zippel/bench/schedule_scaling.py:68(build_timed)\n        1  135.424  135.424  256.819  256.819 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:218(peak_live_values)\n454954368  121.116    0.000  121.116    0.000 {method 'get' of 'dict' objects}\n        1    1.075    1.075    7.746    7.746 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:249(build_schedule)\n        1    0.558    0.558    3.120    3.120 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:128(nonzero_masks)\n   662294    2.188    0.000    2.839    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:96(_path_assignments)\n  1982208    2.087    0.000    2.806    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:117(_offset)\n  7250432    0.719    0.000    0.719    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:121(<genexpr>)\n  5265920    0.466    0.000    0.466    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:114(<genexpr>)\n   331136    0.167    0.000    0.233    0.000 {method 'update' of 'set' objects}\n  1986816    0.184    0.000    0.184    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:113(<genexpr>)\n  1325152    0.170    0.000    0.170    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/zippel/ir.py:101(slices_for)\n\n\n"
+  }
+}

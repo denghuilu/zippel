@@ -1,0 +1,267 @@
+{
+  "programs": {
+    "fwd": {
+      "rows": [
+        {
+          "group": 21,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 7.282994920387864e-05
+        },
+        {
+          "group": 24,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 4.3550971895456314e-05
+        },
+        {
+          "group": 28,
+          "predicted": 2,
+          "terms": 2,
+          "seconds": 5.388702265918255e-05
+        },
+        {
+          "group": 18,
+          "predicted": 6,
+          "terms": 6,
+          "seconds": 8.902198169380426e-05
+        },
+        {
+          "group": 31,
+          "predicted": 6,
+          "terms": 6,
+          "seconds": 0.00010278099216520786
+        },
+        {
+          "group": 33,
+          "predicted": 10,
+          "terms": 10,
+          "seconds": 0.00016210699686780572
+        },
+        {
+          "group": 2,
+          "predicted": 256,
+          "terms": 192,
+          "seconds": 0.0012519610463641584
+        },
+        {
+          "group": 32,
+          "predicted": 510,
+          "terms": 430,
+          "seconds": 0.0033299129572696984
+        },
+        {
+          "group": 39,
+          "predicted": 512,
+          "terms": 2,
+          "seconds": 0.004451798042282462
+        },
+        {
+          "group": 44,
+          "predicted": 1152,
+          "terms": 9,
+          "seconds": 0.009258496982511133
+        },
+        {
+          "group": 4,
+          "predicted": 41088,
+          "terms": 321,
+          "seconds": 0.32638265303103253
+        },
+        {
+          "group": 13,
+          "predicted": 99840,
+          "terms": 390,
+          "seconds": 0.7784375720075332
+        },
+        {
+          "group": 36,
+          "predicted": 492160,
+          "terms": 769,
+          "seconds": 4.795215282996651
+        },
+        {
+          "group": 40,
+          "predicted": 658048,
+          "terms": 5132,
+          "seconds": 7.159941260993946
+        }
+      ],
+      "exponent_vs_terms": 1.2041935746775936,
+      "r2_vs_terms": 0.5753096783438847,
+      "exponent_vs_volume": 0.9716337365018828,
+      "r2_vs_volume": 0.9920339731817013,
+      "max_terms_built": 5132,
+      "max_volume_built": 658048
+    },
+    "force": {
+      "rows": [
+        {
+          "group": 21,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 5.215802229940891e-05
+        },
+        {
+          "group": 83,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 3.7375022657215595e-05
+        },
+        {
+          "group": 81,
+          "predicted": 2,
+          "terms": 2,
+          "seconds": 4.2782980017364025e-05
+        },
+        {
+          "group": 112,
+          "predicted": 3,
+          "terms": 3,
+          "seconds": 3.5582983400672674e-05
+        },
+        {
+          "group": 20,
+          "predicted": 8,
+          "terms": 6,
+          "seconds": 8.329295087605715e-05
+        },
+        {
+          "group": 34,
+          "predicted": 10,
+          "terms": 10,
+          "seconds": 0.00013522797962650657
+        },
+        {
+          "group": 2,
+          "predicted": 256,
+          "terms": 192,
+          "seconds": 0.0010887340176850557
+        },
+        {
+          "group": 55,
+          "predicted": 384,
+          "terms": 3,
+          "seconds": 0.02051033900352195
+        },
+        {
+          "group": 67,
+          "predicted": 768,
+          "terms": 3,
+          "seconds": 0.007028070976957679
+        },
+        {
+          "group": 14,
+          "predicted": 66048,
+          "terms": 258,
+          "seconds": 0.49512765096733347
+        },
+        {
+          "group": 66,
+          "predicted": 492288,
+          "terms": 1923,
+          "seconds": 4.413331376039423
+        },
+        {
+          "group": 40,
+          "predicted": 663808,
+          "terms": 5168,
+          "seconds": 7.0597752159810625
+        }
+      ],
+      "exponent_vs_terms": 1.0097902587962995,
+      "r2_vs_terms": 0.5435575129067314,
+      "exponent_vs_volume": 0.9608883233261777,
+      "r2_vs_volume": 0.96634029024406,
+      "max_terms_built": 5168,
+      "max_volume_built": 663808
+    },
+    "dbwd": {
+      "rows": [
+        {
+          "group": 21,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 6.05739769525826e-05
+        },
+        {
+          "group": 274,
+          "predicted": 1,
+          "terms": 1,
+          "seconds": 3.993499558418989e-05
+        },
+        {
+          "group": 176,
+          "predicted": 2,
+          "terms": 2,
+          "seconds": 4.7965964768081903e-05
+        },
+        {
+          "group": 92,
+          "predicted": 4,
+          "terms": 4,
+          "seconds": 5.113502265885472e-05
+        },
+        {
+          "group": 33,
+          "predicted": 10,
+          "terms": 10,
+          "seconds": 0.00013890804257243872
+        },
+        {
+          "group": 315,
+          "predicted": 64,
+          "terms": 64,
+          "seconds": 0.00035253301030024886
+        },
+        {
+          "group": 107,
+          "predicted": 384,
+          "terms": 3,
+          "seconds": 0.002222906972747296
+        },
+        {
+          "group": 27,
+          "predicted": 770,
+          "terms": 356,
+          "seconds": 0.004104383988305926
+        },
+        {
+          "group": 57,
+          "predicted": 1280,
+          "terms": 9,
+          "seconds": 0.009290527028497308
+        },
+        {
+          "group": 125,
+          "predicted": 41216,
+          "terms": 322,
+          "seconds": 0.2822594050085172
+        },
+        {
+          "group": 210,
+          "predicted": 331136,
+          "terms": 2587,
+          "seconds": 2.8477386530139484
+        },
+        {
+          "group": 40,
+          "predicted": 666112,
+          "terms": 5186,
+          "seconds": 6.874935092986561
+        }
+      ],
+      "exponent_vs_terms": 1.1986315314690454,
+      "r2_vs_terms": 0.6596540540060867,
+      "exponent_vs_volume": 1.007424087847095,
+      "r2_vs_volume": 0.99317415657416,
+      "max_terms_built": 5186,
+      "max_volume_built": 666112
+    }
+  },
+  "profile": {
+    "group": 40,
+    "terms": 5186,
+    "text": "         43626943 function calls (43626936 primitive calls) in 17.204 seconds\n\n   Ordered by: cumulative time\n   List reduced from 62 to 12 due to restriction <12>\n\n   ncalls  tottime  percall  cumtime  percall filename:lineno(function)\n        1    0.240    0.240   17.434   17.434 /iopsstor/scratch/cscs/dlu/iclr/zippel/bench/schedule_scaling.py:68(build_timed)\n        1    2.537    2.537   15.558   15.558 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:262(build_schedule)\n        1    1.165    1.165    6.353    6.353 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:128(nonzero_masks)\n  1327668    4.331    0.000    5.619    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:96(_path_assignments)\n  3975680    3.876    0.000    5.304    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:117(_offset)\n        1    0.579    0.579    1.529    1.529 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:218(peak_live_values)\n 14544896    1.428    0.000    1.428    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:121(<genexpr>)\n 10562048    0.930    0.000    0.930    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:114(<genexpr>)\n   663808    0.603    0.000    0.795    0.000 {method 'update' of 'set' objects}\n  3982848    0.358    0.000    0.358    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/codegen/schedule.py:113(<genexpr>)\n  2658552    0.334    0.000    0.334    0.000 /iopsstor/scratch/cscs/dlu/iclr/zippel/zippel/ir.py:101(slices_for)\n  2386320    0.291    0.000    0.291    0.000 {method 'append' of 'list' objects}\n\n\n"
+  }
+}

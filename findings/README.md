@@ -25,6 +25,7 @@ was learned the expensive way here.
 |---|---|
 | **An instrument must not pre-pay the cost it measures.** The dbwd emission preflight ranked groups by `n_terms`, which requires building every schedule to learn which are large — so it spent fifteen minutes paying the exact cost it was built to quantify, and produced nothing. Replaced by an analytic O(paths) size predictor. | `bench/dbwd_scale_preflight.py` → `bench/schedule_scaling.py` |
 | **A good fit is not an explanation.** A constant fitted to reproduce known traffic fits it well under either physical story; the 0.4 % residual distinguished nothing, and only the device's capacity and an independent bandwidth measurement did. | `dcgm-bandwidth-constant.md` |
+| **A tight correlation is not a mechanism.** Schedule cost fitted index-space volume at R² 0.976, and the inferred cause (walking the dense index space) was wrong: 97 % of it was a quadratic liveness scan, correlated with volume only because bigger spaces make more assignments. Profile before attributing. | D31 |
 | **A falsification test can be vacuous in the way the assertion it validates can be.** The first planted dropped-term fault deleted `−sin(0·γ)`, which is exactly zero, so the test passed while proving nothing. | `compiled-ran-clean-wrong.md` |
 | **An estimator that gates a decision must be conservative or carry a falsification test.** `peak_live_values` under-reported by two orders of magnitude and its guard failed by *not raising*. | D26 |
 

@@ -444,6 +444,11 @@ must be near-linear in index-space volume (k <= 1.2) *and* the whole dbwd progra
 in bounded wall-clock. Currently k = 1.27 — marginally over — with the constant the larger
 problem.
 
+**Resolved, and the diagnosis it was based on was wrong.** See D31 — the profile shows
+enumeration is 3 % of the cost and my liveness analysis is 97 %. Criterion now met: k = 0.96–1.01
+across all three programs, dbwd whole-program 68 s. The text below records the reasoning as it
+stood.
+
 **Fix timing, ruled: the first commit of S2, before any grouping search.** My original plan was
 to defer it as gold-plating. That is wrong for one specific reason: D28's operating rule says
 alternatives whose predicted traffic gap falls inside the uncertainty band get *emitted and
@@ -455,3 +460,49 @@ The fix: skip provably-zero regions *during* enumeration instead of filtering af
 are already computed and merely applied one layer too late. Acceptance is a re-run of
 `bench/schedule_scaling.py` meeting k <= 1.2 with the constant-factor improvement reported
 against today's table. S1c proceeds first, untouched.
+
+
+## 2026-08-07 — D31: the schedule-construction cost was my liveness analysis, not the enumeration. D30 met.
+
+D30 blamed schedule construction on walking the dense index space, and the fix was ruled to be
+"apply the zero-masks during enumeration", scheduled as S2's first commit. **`cProfile` refutes
+that diagnosis.** On dbwd g210 (265 s total):
+
+    peak_live_values      256.8 s      97 %
+    build_schedule          7.7 s       3 %   <- the enumeration the ruling targeted
+    dict.get       454,954,368 calls, 121 s
+
+`Schedule.peak_live_values` rescanned the whole live set at every assignment to find values whose
+last use had passed -- O(assignments x live), and it is called on every group because it is the
+D26 register-budget precondition that decides T1 vs T2. Bucketing values by the step they die at
+expresses the same work once per value instead of once per value per step. Five lines.
+
+    group                     before      after   speedup
+    fwd  g13   99,840 vol      7.15 s    0.78 s      9.2x
+    fwd  g36  492,160 vol     52.31 s    4.80 s     10.9x
+    fwd  g40  658,048 vol     94.22 s    7.16 s     13.2x
+    dbwd g210 331,136 vol    115.10 s    2.85 s     40.4x
+
+    exponent vs volume       fwd 1.27 -> 0.97 (R^2 0.99)
+                             force    -> 0.96 (R^2 0.97)
+                             dbwd 1.40 -> 1.01 (R^2 0.99)
+
+    whole-program dbwd        19.6 min -> 68 s      17x
+
+**D30's dual criterion is met**: k <= 1.2 on all three programs, and the whole dbwd program
+schedules in about a minute.
+
+Two things worth stating plainly:
+
+1. **I fixed this now rather than at S2's first commit as ruled.** The ruling targeted
+   enumeration; the measurement says enumeration is 3 %. The fix that was ruled on would have
+   bought at most a few percent, and this one is five lines with no design risk and speeds up
+   S1c's own repeated builds. The *timing* intent -- fast construction before it enters a search
+   inner loop -- is satisfied earlier rather than later. The masks-during-enumeration change is
+   now a ~3 % optimisation and I would not spend S2's first commit on it; that is for review.
+2. **The profile contradicted a hypothesis I had already written into three documents.** D30,
+   REPORT 8.5d and docs/templates.md all attribute the cost to walking the dense index space, and
+   two of those went out before anyone profiled anything. The volume *correlation* was real --
+   R^2 0.976 -- because bigger index spaces produce more assignments and the quadratic scan is in
+   the assignment count. A tight fit to a plausible mechanism is not evidence for that mechanism,
+   which is the same lesson as the DCGM constant, one layer up.
