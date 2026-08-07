@@ -600,3 +600,37 @@ checker rather than the thing checked:
    support REPL mode, save the function to a file instead" — the same constraint that already
    forced `codegen/emit.py` to write generated kernels to disk. Learned twice; it is now
    `tools/_env_smoke.py`, a real file.
+
+## 2026-08-07 — D35: compile time is quadratic in group width, so fusion width needs a cap.
+
+The cost ledger (D-directive, now populated) gives the first real compile-time data, and it is
+the opposite shape from schedule construction. **[profile/measurement]** — 12 forward groups,
+FP64, `cute.compile` wall-clock:
+
+    compile_s = 1.63e-5 * terms^1.97      R^2 0.903
+
+against schedule construction's `terms^0.97-1.01` (D31). Whole-forward compile is **477.5 s for
+47 groups**; extrapolated, the one skipped group at 23 040 terms is **~109 minutes on its own —
+13.7x the other 47 combined.**
+
+**This is a direct constraint on the fusion pass, and it opposes D23.** D23 says fuse harder so
+the dense store is never made; a wider group has more terms; terms cost quadratically to compile.
+The `cat_83 + rotin_84` group is the concrete case: fusing them elides one `[E,9,256]`
+intermediate — 2.28 GiB at si_medium, exactly the store D23 exists to remove — and costs ~109
+minutes of compile to do it. Splitting them pays the store and compiles in ~2 minutes.
+
+So **fusion width is not free**, and the S2 grouping search has to weigh a byte saving against a
+compile cost rather than maximising fusion. A width cap belongs in the selection rule; where it
+sits is a measurement, not a guess, and it is the first thing S2's search should establish.
+
+**Stated uncertainty.** The fit mixes templates and one point deviates badly: `scatter_100` (T3,
+1 152 terms) took 72.1 s against 17.8 s predicted, 4x. Since `rotin` is *also* T3, the 109-minute
+figure could be a substantial under-estimate. It is left running to convert the extrapolation
+into a measurement, because that is cheap and the number matters for S3 — where dbwd has 320
+groups and the same quadratic applies.
+
+Consequence for S3 (D30's whole-program criterion): D30 measured *schedule* time and set an entry
+criterion on it, and I made the constructor linear on that basis. The ledger now says compile
+dominates schedule by **24x** (477.5 s vs 19.5 s) at forward scale. D30's criterion was aimed at
+the smaller of the two costs. It stands as written, but the S3 entry criterion that actually
+binds is compile time, and D30 should be read alongside this.

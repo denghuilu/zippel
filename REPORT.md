@@ -1145,6 +1145,35 @@ is now measured to be worth ~3 %.
 Per-kernel schedule / emit / compile wall-clock is recorded from here on (`codegen/costs.py`),
 with no analysis attached, so the compile-time column exists when it is asked for.
 
+### 8.5e What the compiler costs to run
+
+The per-kernel cost ledger (`codegen/costs.py`) records schedule / emit / compile / guard
+wall-clock for every generated kernel. Forward program, si_small, FP64, 47 groups:
+
+| phase | total | share |
+|---|---|---|
+| schedule | 19.5 s | 3.8 % |
+| emit | 0.0 s | ~0 % |
+| **compile** (`cute.compile`) | **477.5 s** | **91.6 %** |
+| guard (budget checks, metadata validation, bound evaluation) | 23.8 s | 4.6 % |
+
+Two things follow, and the first is a correction to where effort went.
+
+**Compile dominates schedule construction by 24×.** §8.5d measured schedule construction, found
+it superlinear, and D30 made it an S3 entry criterion; D31 then made it linear. That work was
+correct but aimed at the smaller cost. **[profile]**
+
+**Compile time is quadratic in group width** — `compile_s = 1.63e-5 · terms^1.97`, R² 0.903,
+against schedule's `terms^0.97`. That is a constraint on the *fusion pass*, and it opposes D23:
+fusing `cat_83 + rotin_84` elides a `[E,9,256]` intermediate — 2.28 GiB at si_medium, precisely
+the store D23 exists to remove — and costs an extrapolated **109 minutes** of compile to do it,
+against ~2 minutes for the split pair. Fusion width is not free, and S2's grouping search must
+weigh bytes saved against compile cost rather than maximise fusion (D35).
+
+The **guard** column is the verification overhead this project imposes on itself: 4.6 %. That is
+the number to quote when the bound, the register-budget precondition and the metadata contract
+are described as expensive.
+
 ### 8.6 Standing threads
 
 | thread | status |
