@@ -109,6 +109,28 @@ groups, 35 archetypes.
 
 ### S2 — jointly scheduled (E, F), adds T3
 
+**Partitioning and template selection are COUPLED, and S2's search must treat them as one
+problem.** This was assumed separable when the selection rule was written — partition first, then
+route each group — and it is not. Fusing a gather into a channel-heavy op does not merely make
+the group wider; it changes which template the group is *eligible* for, because any index map
+routes to T3 and T3 unrolls the channel axis that T2 would have parallelised. Measured, on the
+forward: fusing `cat_83` into `rotin_84` produces 23 040 terms where splitting produces 5 123,
+and **total emitted terms across the whole program fall 56 %** when the pair is split (D36).
+
+So S2's grouping search either **evaluates `(partition, template)` jointly**, or **re-validates
+template viability after every fusion decision** and rejects a merge that demotes a group's
+template. The first is principled; the second is cheaper and adequate if the search is greedy.
+Either way, "maximise fusion, then route" is now known to be wrong, and D36 is the exhibit.
+
+**The principled fix is a channel-parallel T3** — a gather or scatter that keeps the channel axis
+on threads rather than unrolling it — which removes the coupling at its source rather than
+working around it in the search. That is confirmed as S2's deliverable under "full
+reduction-class generality"; the S1 width cap (`max_volume=10_000`) is the stopgap that makes
+S1c measurable in the meantime, and it should be retired when channel-parallel T3 lands rather
+than kept as a permanent knob.
+
+
+
 Force is 290 ops, 115 acyclic groups, 78 archetypes. What S2 adds beyond S1 is **T3, the
 reduction-rooted template class**, which covers two things that look different and are not:
 

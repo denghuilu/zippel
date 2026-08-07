@@ -1100,7 +1100,8 @@ Fitted log-log: **t ~ volume^1.27 (R² 0.976)** against **t ~ terms^1.00 (R² 0.
 time (that the constructor's cost *is* the index walk) was wrong, and the correction is below;
 the fit itself stands.
 
-**Measured at dbwd scale, and it corrects an extrapolation published here an hour earlier.** That
+**[extrapolation, 5.7× beyond data → later measured]** **Measured at dbwd scale, and it corrects
+an extrapolation published here an hour earlier.** That
 draft reasoned from "dbwd is 9× the forward" to 5 M- and 20 M-volume groups costing 21 minutes
 and 2 hours apiece. dbwd's groups are not bigger — its largest index space is **666 112** against
 the forward's 658 048 — there are simply 5.7× more of them (251 schedulable vs 44). The
@@ -1176,6 +1177,19 @@ weigh bytes saved against compile cost rather than maximise fusion (D35).
 The **guard** column is the verification overhead this project imposes on itself: 4.6 %. That is
 the number to quote when the bound, the register-budget precondition and the metadata contract
 are described as expensive.
+
+**Whole-forward cold compile — a reported number, not bookkeeping.** Composing the forward
+(`bench/s1c_forward.py`, si_small, FP64, 55 kernels under the D36 term-minimal split):
+
+| phase | whole forward |
+|---|---|
+| **compile** (`cute.compile`, cold) | **523.7 s** |
+| schedule construction | 23.5 s |
+| guard | 0.2 s |
+
+Cold on every run: the CuTe DSL JIT cache is not functioning here (§8.9, R8), so this is what it
+costs to build the forward from scratch each time. It is quoted as a cold number deliberately —
+a warm number would describe a cache that does not currently work.
 
 ### 8.6 Standing threads
 

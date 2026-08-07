@@ -431,8 +431,8 @@ pass exists so the *kernel* does not pay for structural zeros, and the *compiler
 in full. A group with 390 emitted terms takes 7.1 s while one with 321 takes 0.77 s, because the
 first walks a 99 840-element index space and the second 41 088.
 
-Absolute cost matters as much as the exponent. The largest forward group (658 048 volume, 5 132
-terms) takes **94 s** to schedule.
+**[extrapolation → superseded by measurement, D37]** Absolute cost matters as much as the
+exponent. The largest forward group (658 048 volume, 5 132 terms) takes **94 s** to schedule.
 
 *Corrected after measuring dbwd:* I first extrapolated to 5 M- and 20 M-volume dbwd groups at ~21
 minutes and ~2 hours apiece, reasoning from "dbwd is 9x the forward". That was the wrong axis.
@@ -609,7 +609,9 @@ FP64, `cute.compile` wall-clock:
 
     compile_s = 1.63e-5 * terms^1.97      R^2 0.903
 
-against schedule construction's `terms^0.97-1.01` (D31). Whole-forward compile is **477.5 s for
+**[correlation + extrapolation 4.5x beyond the largest measured point]** — refit to
+`terms^1.87`, R^2 0.942 once the point was measured; the prediction it carried was 2.1x high
+(D37). Against schedule construction's `terms^0.97-1.01` (D31). Whole-forward compile is **477.5 s for
 47 groups**; extrapolated, the one skipped group at 23 040 terms is **~109 minutes on its own —
 13.7x the other 47 combined.**
 
@@ -703,3 +705,26 @@ should be taken; that is why this one was left running, and it is the practice t
 
 Also worth recording: `rotin` at 23 040 terms is **bit-exact**, 0.00e+00 against the FP64
 interpreter, which is the largest single kernel this compiler has produced.
+
+## 2026-08-07 — D38: the si_medium OOM was host RAM, not device memory. Oracle runs move to compute nodes.
+
+`bench/traffic_calibrate.py` and REPORT §8.5c both recorded that "the full FP64 forward at
+si_medium materialises ~40 GiB and was OOM-killed", and I let that stand as though it were a GPU
+limit. It is not: `zippel/interp.py` sets **`DEVICE = "cpu"`**, so the FP64 oracle is
+CPU-resident and the kill was the host OOM killer. Surfaced when the S1c composition compared a
+CUDA tensor against a CPU one.
+
+Two consequences, and the second matters more.
+
+1. The attribution is corrected wherever it appears. A ~40 GiB host allocation on a login node
+   shared with other users is a different fact from a 40 GiB GPU allocation on a 96 GiB card —
+   the first is antisocial and the second would have been fine.
+2. **Big-fixture oracle comparisons run on compute nodes from now on**, not on the login node.
+   The oracle is the one part of this pipeline that is deliberately unoptimised, FP64 and
+   host-resident, and si_medium is 27x si_small. Running it under `sbatch` costs nothing we care
+   about and stops a verification step from being the most disruptive thing this project does to
+   a shared machine.
+
+Evidence class of the original claim: **[correlation]** — a job died, a large number was
+available, and I joined them. Nothing was measured about *which* memory ran out. Exactly the
+pattern D32 exists to catch, one week and three instances later.

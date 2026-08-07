@@ -53,6 +53,33 @@ def time_ms(fn, warmup: int, iters: int) -> dict:
             "iqr_ms": samples[int(n * 0.75)] - samples[int(n * 0.25)], "iters": n}
 
 
+def count_launches(fn) -> int | None:
+    """CUDA kernel launches for one call of `fn`, via the torch profiler.
+
+    Counted differently from the fused side, which knows its launch count by construction, so
+    the two are reported side by side and **not** claimed to be measured the same way. A
+    profiler counts kernels the runtime actually issued, including ones a single `aten` op
+    expands into; the compiled count is the number of kernels the compiler emitted. The
+    comparison is meaningful in order of magnitude, not to the unit.
+    """
+    try:
+        from torch.profiler import ProfilerActivity, profile
+    except Exception:                                          # noqa: BLE001
+        return None
+    fn()
+    torch.cuda.synchronize()
+    try:
+        with profile(activities=[ProfilerActivity.CUDA], record_shapes=False) as prof:
+            fn()
+            torch.cuda.synchronize()
+        return sum(int(e.count) for e in prof.key_averages()
+                   if getattr(e, "device_type", None) is not None
+                   and "cuda" in str(getattr(e, "device_type", "")).lower()
+                   and e.self_device_time_total > 0)
+    except Exception:                                          # noqa: BLE001
+        return None
+
+
 def peak_mib(fn) -> float:
     torch.cuda.synchronize()
     torch.cuda.empty_cache()
@@ -99,10 +126,25 @@ def main():
             block(batch["pos"], batch["atomic_numbers"], batch["x_node"], batch["edge_index"],
                   batch["shifts"], batch["cos_gamma_k"], batch["sin_gamma_k"], jd)
 
+    import subprocess
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True,
+                             text=True, timeout=10).stdout.strip()
+    except Exception:                                          # noqa: BLE001
+        sha = None
+
     result = {
         "fixture": args.fixture, "dtype": args.dtype, "sizes": sizes,
-        "host": socket.gethostname(), "slurm_job": None,
+        "host": socket.gethostname(), "slurm_job": None, "git_sha": sha,
+        # provenance: five allocations that silently disagreed about the partition would produce
+        # a spread that looks like hardware variance and is not
+        "max_volume": args.max_volume,
+        "warmup": args.warmup, "iters": args.iters,
         "launches_fused": cp.n_launches,
+        "launches_eager": count_launches(eager),
+        "launch_count_note": "fused = kernels emitted by the compiler; eager = CUDA kernels the "
+                             "profiler observed. Different methods; comparable in order of "
+                             "magnitude, not to the unit.",
         "templates": {t: sum(1 for g in cp.groups if g.template == t)
                       for t in ("T1", "T2", "T3")},
         "fused": time_ms(fused, args.warmup, args.iters),
@@ -117,10 +159,11 @@ def main():
     result["peak_ratio"] = result["peak_mib_eager"] / result["peak_mib_fused"]
 
     print(f"{args.fixture} {args.dtype}  edges={sizes['edge']}  host={result['host']}")
+    le = result["launches_eager"]
     print(f"  fused  {f:8.3f} ms  (IQR {result['fused']['iqr_ms']:.3f})  "
           f"{cp.n_launches} launches  peak {result['peak_mib_fused']:.1f} MiB")
     print(f"  eager  {e:8.3f} ms  (IQR {result['eager']['iqr_ms']:.3f})  "
-          f"peak {result['peak_mib_eager']:.1f} MiB")
+          f"{le if le is not None else '?'} launches  peak {result['peak_mib_eager']:.1f} MiB")
     print(f"  speedup {result['speedup']:.3f}x   peak ratio {result['peak_ratio']:.3f}x")
 
     out = pathlib.Path(args.out or
