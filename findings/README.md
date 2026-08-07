@@ -43,3 +43,4 @@ was learned the expensive way here.
 | `traffic-model-calibration.md` | stands — what the traffic model predicts, and what it does not |
 | `dcgm-bandwidth-constant.md` | **MECHANISM CORRECTED** — the fit stays in service; it is not a bandwidth |
 | `compiled-ran-clean-wrong.md` | stands — my `invar_101` bug, and the three-codebase table for its failure class |
+| `keyed-by-identity.md` | stands — one bug class, three instances, three different detection mechanisms |

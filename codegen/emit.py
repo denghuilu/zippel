@@ -246,6 +246,11 @@ def build_kernel(source: str, name: str, directory: pathlib.Path | None = None,
             raise MetadataMismatch(
                 f"{name} declares SEGMENT={module.SEGMENT!r} but its group is rooted on "
                 f"{want_seg!r}; launching it would index a buffer with the wrong extent")
+        driving = getattr(module, "DRIVING_SEGMENT", module.SEGMENT)
+        if driving == want_seg and getattr(module, "SCATTERS", False):
+            raise MetadataMismatch(
+                f"{name} declares SCATTERS but its DRIVING_SEGMENT equals its SEGMENT; a scatter "
+                f"iterates the segment it reads, not the one it writes")
         want_depth = max((len(a.terms) for a in sched.assigns), default=1)
         if module.REDUCTION_DEPTH != want_depth:
             raise MetadataMismatch(

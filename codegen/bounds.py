@@ -79,12 +79,18 @@ def _factor_tensor(env: dict[str, torch.Tensor], buf: str, idx: tuple,
     return out, has_ch
 
 
-def magnitude_sum(sched, env: dict[str, torch.Tensor]) -> float:
+def magnitude_sum(sched, env: dict[str, torch.Tensor],
+                  gathers: dict[str, str] | None = None) -> float:
     """max over output elements of SUM |term|, evaluated on the real inputs.
 
     This is the data-dependent half of the bound. Terms are evaluated with absolute values, so
     cancellation makes the result larger than the true output -- which is the point.
+
+    `gathers` maps a live-in to the index buffer it is read through (T3). A gathered operand
+    lives on a different segment from the result -- `pos` has 216 rows where the output has 9 576
+    edges -- so it must be gathered here too, or the magnitudes do not even align in shape.
     """
+    gathers = gathers or {}
     worst = 0.0
     for a in sched.assigns:
         if not a.terms:
@@ -93,7 +99,15 @@ def magnitude_sum(sched, env: dict[str, torch.Tensor]) -> float:
         for term in a.terms:
             extent = getattr(sched, "extent", 0)
             window = getattr(a, "ch_range", None) or ((0, extent) if extent else None)
-            parts = [_factor_tensor(env, f[0], f[1], window) for f in term.factors]
+            parts = []
+            gs = getattr(term, "gathers", ()) or (None,) * len(term.factors)
+            for f, g in zip(term.factors, gs):
+                tensor, has_ch = _factor_tensor(env, f[0], f[1], window)
+                # per-factor, not per-buffer: one buffer can be read through several maps
+                gmap = g if g is not None else gathers.get(f[0])
+                if gmap is not None:
+                    tensor = tensor[env[gmap].long()]
+                parts.append((tensor, has_ch))
             if not parts:
                 continue
             # Align ranks: a factor with no channel index is [seg] while one with CH is
@@ -116,7 +130,8 @@ def max_factors(sched) -> int:
     return max((len(t.factors) for a in sched.assigns for t in a.terms), default=1)
 
 
-def term_magnitudes(sched, env: dict[str, torch.Tensor]) -> list[tuple[float, int, int]]:
+def term_magnitudes(sched, env: dict[str, torch.Tensor],
+                    gathers: dict[str, str] | None = None) -> list[tuple[float, int, int]]:
     """`(magnitude, assign index, term index)` for every term, largest first.
 
     Used to choose *where* to plant a fault. Naive selection does not work: the first multi-term
@@ -124,6 +139,7 @@ def term_magnitudes(sched, env: dict[str, torch.Tensor]) -> list[tuple[float, in
     zero, so deleting it changes nothing and the resulting test passes vacuously. A fault has to
     be planted somewhere it can actually be observed, and that is a measurable property.
     """
+    gathers = gathers or {}
     out: list[tuple[float, int, int]] = []
     extent = getattr(sched, "extent", 0)
     for ai, a in enumerate(sched.assigns):
@@ -132,6 +148,8 @@ def term_magnitudes(sched, env: dict[str, torch.Tensor]) -> list[tuple[float, in
             piece = None
             for factor in term.factors:
                 tensor, has_ch = _factor_tensor(env, factor[0], factor[1], window)
+                if factor[0] in gathers:
+                    tensor = tensor[env[gathers[factor[0]]].long()]
                 if piece is not None and piece.dim() != tensor.dim():
                     if piece.dim() < tensor.dim():
                         piece = piece.unsqueeze(-1)
@@ -144,7 +162,8 @@ def term_magnitudes(sched, env: dict[str, torch.Tensor]) -> list[tuple[float, in
     return out
 
 
-def ordering_bound(sched, env: dict[str, torch.Tensor]) -> float:
+def ordering_bound(sched, env: dict[str, torch.Tensor],
+                   gathers: dict[str, str] | None = None) -> float:
     """The largest difference re-associating this schedule's arithmetic can produce.
 
     `2 * (depth - 1 + factors) * eps * max SUM|terms|`. The `factors` term is not decoration: a
@@ -153,7 +172,7 @@ def ordering_bound(sched, env: dict[str, torch.Tensor]) -> float:
     0.0 for single-term assignments and fired on a correct kernel differing by 1.11e-16.
     """
     depth = reduction_depth(sched)
-    return 2.0 * (depth - 1 + max_factors(sched)) * EPS * magnitude_sum(sched, env)
+    return 2.0 * (depth - 1 + max_factors(sched)) * EPS * magnitude_sum(sched, env, gathers)
 
 
 def assert_within_bound(name: str, got: torch.Tensor, want: torch.Tensor,

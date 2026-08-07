@@ -186,6 +186,14 @@ class Term:
 
     coeff: float
     factors: tuple[tuple[str, tuple[int, ...]], ...]   # (buffer, absolute trailing index)
+    #: Index buffer each factor is gathered through, or None. Parallel to `factors`.
+    #:
+    #: Per *factor*, not per buffer, because one buffer can be read through several different
+    #: index maps in one op: `evec_0` is `pos[dst] - pos[src] + shifts`, whose inputs are
+    #: `(pos, pos, shifts)` with index maps `(dst, src, None)`. A `{buffer -> map}` dict keeps
+    #: whichever it saw last, so both reads became `pos[src]` and the kernel computed `shifts`.
+    #: Third occurrence of one bug class -- see findings/keyed-by-identity.md.
+    gathers: tuple[str | None, ...] = ()
 
 
 @dataclass
@@ -262,10 +270,11 @@ class Schedule:
 def build_schedule(prog: Program, spec: GroupSpec,
                    given: dict[str, set[tuple[int, ...]]] | None = None) -> Schedule:
     """Turn a fusion group into straight-line scalar assignments, zeros elided."""
-    if index_maps_used(prog, spec):
-        raise NotImplementedError(
-            f"group {spec.name} carries gather/scatter index maps; "
-            "the v1 emitter handles register-resident groups only")
+    # Index maps are *not* a schedule concern. They change which segment coordinate a read or
+    # write lands on, and the schedule is expressed entirely in trailing indices, so a gathered
+    # or scattered group has the same term structure as an ungathered one. T3's emitter applies
+    # the indirection (codegen/emit_reduce.py); refusing here would have been refusing to
+    # schedule a program we can perfectly well schedule.
 
     masks = nonzero_masks(prog, spec, given)
     sched = Schedule(spec=spec, masks=masks)
@@ -289,17 +298,18 @@ def build_schedule(prog: Program, spec: GroupSpec,
                              if sl else t.sizes)
             rank = len(p.out_slice) or op.out_type.rank
             for out_idx, in_idxs in _path_assignments(p, sizes, rank):
-                factors, ok = [], True
+                factors, gathers, ok = [], [], True
                 for pos, j in enumerate(p.operands):
                     abs_idx = _offset(p.slices_for(pos), in_idxs[pos])
                     if abs_idx not in masks[op.inputs[j]]:
                         ok = False
                         break
                     factors.append((op.inputs[j], abs_idx))
+                    gathers.append(op.index_maps[j] if j < len(op.index_maps) else None)
                 if not ok:
                     continue
                 acc[_offset(p.out_slice, out_idx)].append(
-                    Term(coeff=p.coeff, factors=tuple(factors)))
+                    Term(coeff=p.coeff, factors=tuple(factors), gathers=tuple(gathers)))
 
         for idx in sorted(acc):
             sched.assigns.append(Assign(target=n, index=idx, terms=tuple(acc[idx])))

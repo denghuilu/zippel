@@ -88,26 +88,31 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32") -> 
     # Group by the value being produced. Several disjoint channel ranges writing one value is a
     # concatenation, and must become ONE if/elif chain: separate `if` blocks leave the register
     # undefined on the paths that do not run, and would emit one store per branch.
+    # Carry each assignment's position, rather than searching for it later. `list.index()` on a
+    # dataclass compares by VALUE, so two assignments agreeing on every field resolve to the
+    # first -- and this index selects where a barrier is emitted. Same bug class as D21 and the
+    # T3 gather map (findings/keyed-by-identity.md); found by the standing `.index(` audit that
+    # finding instituted, which is the first thing that audit caught.
     order_keys: list[tuple] = []
     by_value: dict[tuple, list] = {}
-    for a in sched.assigns:
+    for pos, a in enumerate(sched.assigns):
         key = (a.target, a.index)
         if key not in by_value:
             by_value[key] = []
             order_keys.append(key)
-        by_value[key].append(a)
+        by_value[key].append((pos, a))
 
     emitted = 0
     for key in order_keys:
         group = by_value[key]
-        idx_in_sched = sched.assigns.index(group[0])
+        idx_in_sched = group[0][0]
         for buf in sched.stage_before.get(idx_in_sched, []):
             body.append(f"s_{buf}[c] = {_sym(buf, (CH,))}")
             body.append("cute.arch.barrier()")
 
-        ranged = [a for a in group if a.ch_range is not None]
+        ranged = [a for _pos, a in group if a.ch_range is not None]
         if not ranged:
-            for a in group:
+            for _pos, a in group:
                 body.extend(rhs_lines(a, emitted)); emitted += 1
             continue
 
