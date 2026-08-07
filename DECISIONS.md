@@ -1079,3 +1079,49 @@ load-bearing infrastructure that had only ever been run at the small fixture, an
 without checking. The monitor I armed watched for tracebacks and result lines — neither of which a
 SIGKILL produces — so it stayed silent through a dead job. **Filters must cover death, not just
 failure**: the next monitor watches process liveness, not only stdout.
+
+## 2026-08-07 — D50: direction confirmed, magnitude refuted. Written with two arms in hand, before the other three.
+
+    baseline      714.819 ms      (D42's independent per-kernel figure: 714.8 ms)
+    A_transpose   582.023 ms      1.228x, bit-equal to baseline, err 1.557e-06 vs 1.024e-03 bound
+
+**The baseline reproduces D42 to four significant figures** from a different harness, a separate
+compilation, and tiled si_small values. That confirms the input-independence I asserted to justify
+D49's tiling rather than leaving it asserted, and confirms this is the kernel D42 profiled.
+
+**A gap in my own pre-registration, named before the remaining arms land.** I fixed the *shape* of
+the outcomes — coalescing-dominant, sharing-dominant, B ≪ A_matched, superadditive, all-null — but
+never a threshold for "`dA` large". 1.228x is ~30x the measurement spread, so it is emphatically
+not all-null; and it is nowhere near what the mechanism predicts, so it is not the
+coalescing-dominant cell either. The cell it lands in has no pre-committed home. That is a defect
+in the pre-registration, not a licence to choose now.
+
+**What the arithmetic says.** D42 attributed 651 ms of 714.8 (91 %) to uncoalesced weight traffic.
+Removing that access pattern on all four offending operands recovered **132.8 ms — 18.6 %**. If
+the mechanism carried the weight D42 assigned it, fixing 32 lines per warp down to 1 should have
+recovered on the order of 630 ms. It over-predicts the recoverable time by **~4.7x**.
+
+So D42 is **upheld directionally and refuted quantitatively**, and the ruling splits:
+
+* The layout requirement still enters T2's default emission rule. 1.228x is real, bit-exact, free,
+  carries no capacity limit and no barrier. That consequence stands on its own evidence.
+* **The diagnosis of the remaining 582 ms reopens** — which is the all-null branch's consequence,
+  and it applies to 81 % of the runtime. The 651-vs-714.8 agreement was substantially coincidence,
+  exactly as that branch warned it might be, and it was the most expensive outcome to accept,
+  which is why it was written first.
+
+**A mechanism I should have caught in D42 and did not.** All four weights are `none`-segmented and
+total 1.25 MB — they fit in GH200's 60 MiB L2 many times over. After the first CTAs they are **L2
+hits, not HBM traffic**, so charging them at HBM bandwidth was the wrong model from the start. The
+32-lines-per-warp amplification is real and costs real request throughput — hence a real 1.228x —
+but the price per line is an L2 hit, not a DRAM round trip, which is precisely why the effect is
+~5x smaller than an HBM model predicts. The 651 ms figure agreed with 714.8 ms for the wrong
+reason.
+
+**Consequence for instrumentation, now unavoidable rather than parked.** Static traffic analysis
+has now produced a number that matched the measurement while being built on the wrong memory
+level. `ncu` (REPORT 8.9) stops being a parked convenience and becomes the required next
+instrument for the remaining 582 ms. `bench/s1c_issue_floor.py` will still be run on the arms —
+its per-arm traffic prediction is what makes this falsifiable — but its verdict branch "neither
+floor is within reach ... next instrument is ncu, not more of this" is the branch now expected to
+fire, and it was written before any of these numbers existed.
