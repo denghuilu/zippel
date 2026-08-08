@@ -46,3 +46,25 @@ was learned the expensive way here.
 | `compiled-ran-clean-wrong.md` | stands — my `invar_101` bug, and the three-codebase table for its failure class |
 | `keyed-by-identity.md` | stands — one bug class, four instances, four different detection mechanisms |
 | `cute-dsl-cache-dir-is-a-noop.md` | **REFUTED** — the variable is real; `cute.compile()` disables the cache by design, and the upstream note was withdrawn unfiled |
+
+## Methodology ledger — two entries from the `conv1_90` diagnosis (2026-08-08)
+
+**1. A split verdict is a verdict.** D42 claimed uncoalesced weight access explained `conv1_90`'s
+714.8 ms, on a static model predicting 651 ms. `ncu` says the access pattern was **real**
+(20.31 → 3.61 sectors/request) and that fixing it bought **1.228×**, not the ~4.6× the model
+implied. The right verdict is neither "confirmed" nor "refuted" but **"true as a description,
+false as an account of the cost"** — and the two halves have different consequences: the
+description earned a ratified emission rule, the cost account earned a retraction. A taxonomy with
+only CONFIRMED and REFUTED would have forced one of those to be wrong.
+
+**2. Being wrong about why you were wrong.** D53 correctly refuted its own traffic model (it
+predicted 5 611.8 ms for a kernel measured at 714.8) and then named the cause: the weights are
+1.25 MB in a 60 MiB L2, so they were never DRAM traffic. `ncu` measured the L2 hit rate at
+**57.4 %**, not the >80 % that claim requires. The refutation was right; **the stated mechanism was
+wrong**, and the real cause was the *other* error in the same list — counting textual factor
+occurrences instead of issued loads (2.24 TB actual against 22.4 TB implied, a 10× over-count).
+
+The generalisable part: **a retraction is itself a causal claim and inherits the evidence law.**
+D53's mechanism was asserted at the same moment its subject was being retracted, and the relief of
+having caught an error is exactly when the next one gets waved through. What caught it was a row
+in a pre-registered table written *for that purpose* before any counter existed — not vigilance.

@@ -1356,6 +1356,53 @@ bound and never as an attribution. `bench/s1c_issue_floor.py` now refuses to pri
 attribution when the baseline check fails — the guard would have killed the 651 ms figure on the
 day it was written.
 
+### 8.5i The regime: bandwidth-bound at 78 % of peak, and 508× above compulsory
+
+`ncu` (Nsight Compute 2025.2.0, from the uenv toolkit — see the 8.5c correction) on `conv1_90`,
+si_medium fp32, three arms, one launch each. **[measurement]**
+
+| | baseline | A_transpose | B_smem |
+|---|---|---|---|
+| sectors/request (global ld) | 20.31 | **3.61** | 16.27 |
+| achieved occupancy | 96.90 % | 96.71 % | **6.17 %** |
+| occupancy limit — shared mem | 32 blocks | 32 blocks | **1 block** |
+| dominant stall | `long_scoreboard` 315 | `long_scoreboard` 234 | `long_scoreboard` 59 |
+| `barrier` stall | 0.00 | 0.00 | 0.03 |
+| L2 hit rate | 57.40 % | 52.48 % | 73.44 % |
+| DRAM | **3.13 TB/s (78 % of peak)** | **3.19 TB/s (80 %)** | 0.68 TB/s |
+
+**The kernel is DRAM-bandwidth-bound, and its speedup is exactly its byte reduction:**
+
+    baseline     3.13 TB/s × 0.7148 s = 2.237 TB
+    A_transpose  3.19 TB/s × 0.5820 s = 1.857 TB
+    bytes ratio 1.205   vs   time ratio 1.228   →   1.9 % apart
+
+Out-of-sample on `B_smem` it closes to **0.5 %**. This is the **first cost model in this program
+that reproduces a measurement without being fitted to it** (contrast §8.5c, §8.5g, D53), and it
+satisfies D55 on both counts.
+
+**But bandwidth-bound is not the same as finished, and the next table is why.** Compulsory traffic
+is what a correct implementation with an infinite cache could not avoid — each distinct operand
+byte read once, each output byte written once, weights counted once per *launch* rather than once
+per CTA. Every rounding favours the compulsory column, so each ratio is a **lower bound on the
+waste**. **[static, safe]**
+
+| kernel | compulsory | DRAM | ratio |
+|---|---|---|---|
+| `conv1_90` | 3.46 GB | 2.24 TB | **647×** |
+| `conv2_95` | 2.79 GB | 1.08 TB | **387×** (DRAM assumed at 3.13 TB/s) |
+| `conv1_m0_86` | 1.46 GB | 0.60 TB | **407×** (same assumption) |
+| **top-3 total** | **7.71 GB** | **3.91 TB** | **508×** |
+
+**These two facts belong together.** At 78 % of HBM peak there is nearly no headroom in *access
+pattern*; at 508× compulsory there is enormous headroom in *bytes*. So every future intervention
+on these kernels answers one question — **does it cut DRAM bytes?** — and layout work, having
+delivered its 1.228×, is done.
+
+`conv1_90` moves **8.63 MB per edge** where 13.3 KB is compulsory. Re-reading every weight in
+every CTA would be 1.31 MB — only 15 % of it. **The traffic is not explained by weight re-reads**,
+and naming what does explain it is the next measurement, not the next assumption.
+
 ### 8.6 Standing threads
 
 | thread | status |
