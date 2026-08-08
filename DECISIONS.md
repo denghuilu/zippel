@@ -1689,3 +1689,13 @@ write-allocate on the output, per-slice accounting granularity, or another clien
 which, and I am not asserting one.** It does not affect the attribution above, which rests on the
 theoretical-sector metrics and simple arithmetic, but it means any *total-traffic* budget built on
 these counters is not yet trustworthy. D55 applies to me here as much as to anything else.
+
+## 2026-08-08 — D65: composition correctness after the layout rule — PASS.
+
+    S1C PASS: energy rel 1.117e-15, worst live-out 1.132e-14 (gauss_6)
+    cost ledger: schedule=21.8s emit=0.1s compile=524.9s guard=0.5s
+
+Composed program (55 kernels, 22 T1 / 24 T2 / 9 T3) against the FP64 interpreter, on the energy
+**and every live-out**, with all 16 buffers permuted once and globally through
+`compose.transpose_inputs`. The gap D63 opened is closed: **D61's 1.441× and D62's 1.384× are now
+speed numbers with a correctness result behind them**, rather than speed numbers alone.
