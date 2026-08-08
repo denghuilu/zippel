@@ -2036,3 +2036,51 @@ thread, achieved occupancy, runtime.**
 A third possibility is named so it is not discovered as a surprise: **B beats A on compile time
 while producing identical IR.** That would be a pure win on Python-side cost and no information
 about registers — worth taking, worth not mistaking for the first outcome.
+
+## 2026-08-08 — D78: attribution nail for route C; and a correction to D69's register model.
+
+**If route C wins, read WHERE from SASS, never from compile time.** Two specific things: registers
+per thread, and **whether the weight load sits hoisted outside the unrolled copies or is repeated
+inside them**. A compile-time win is consistent with the backend doing nothing useful — it is the
+same inference gap as reading "faster" for "the mechanism I named". `ncu --set full` reports
+`launch__registers_per_thread`; the hoist has to be read out of the disassembly directly.
+
+**Single code path with the route as a parameter** is what makes the three arms comparable rather
+than three implementations being compared. That is what the D70a substrate was extracted to enable,
+and it is now paying its first dividend.
+
+### The emission structure, worked out — and it corrects D69
+
+Capturing the reuse requires **interleaving**: load a weight once, apply it to all `E_c` edges
+before moving to the next term. The naive interleaving emits one statement per (term, edge) —
+`5 123 × (1 + E_c)` ≈ 25 600 statements at `E_c`=4 against the current **107**, which defeats the
+whole reason `_chunked_sum` exists and would cost far more in Python/trace than the 4× the design
+predicted.
+
+So the interleaving is itself chunked: per block of `CHUNK` terms, emit `CHUNK` weight temporaries,
+then one accumulation statement per edge over that block.
+
+    wt_0 … wt_47      = <edge-independent factors of terms 0…47>      # CHUNK temps live
+    acc_e = acc_e + c_0·wt_0·in_0(e) + … + c_47·wt_47·in_47(e)        # one statement per edge
+
+Statements become `(N/CHUNK) × (CHUNK + E_c)` ≈ 5 600 at `E_c`=4 — 52× the current count but each
+short, which is the tractable regime rather than the 25 600-statement one.
+
+**The register correction.** D69 predicted `32 + 9(E_c−1)`, counting only accumulators. The
+interleaving also holds `CHUNK` weight temporaries:
+
+    registers ≈ CHUNK + 9·E_c
+
+| `E_c` | at `CHUNK`=48 | verdict | at `CHUNK`=16 |
+|---|---|---|---|
+| 4 | 84 | fits | 52 |
+| 8 | 120 | fits | 88 |
+| 16 | **192** | **refused** (>168) | **160 — fits** |
+| 32 | 336 | refused | 304 — refused |
+
+So **the refusal point moves from `E_c`=32 to `E_c`=16 at the default `CHUNK`**, and `CHUNK` becomes
+a second sweep axis rather than a constant: `E_c`=16 is reachable only by trading chunk width for
+accumulators. D69's prediction that `E_c`=32 would be refused survives; its claim that `E_c`=16
+fits does not, and that is a **correction to a pre-registration, made before the measurement rather
+than after**. The refusal rows printed in the results table will therefore be `E_c`=16 at
+`CHUNK`=48 and `E_c`=32 at any `CHUNK` — both as data, with the arithmetic beside them.
