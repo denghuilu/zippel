@@ -1699,3 +1699,35 @@ Composed program (55 kernels, 22 T1 / 24 T2 / 9 T3) against the FP64 interpreter
 **and every live-out**, with all 16 buffers permuted once and globally through
 `compose.transpose_inputs`. The gap D63 opened is closed: **D61's 1.441× and D62's 1.384× are now
 speed numbers with a correctness result behind them**, rather than speed numbers alone.
+
+## 2026-08-08 — D66: rulings after the attribution round.
+
+* **Lever (a) fires first**: edge-batched CTAs with k-tiled smem weight staging. The batching
+  converts the cross-CTA reuse D64 identified into **intra-CTA** reuse, which is what legally
+  revives the staging machinery D46 ruled out and D60 struck — the mechanism changed, not the
+  verdict's basis.
+* **Levers (b) L2-persistence and (c) CTA-scheduling stay held** behind counter reconciliation.
+  Both would be *evaluated* by the very counters whose semantics D64 flagged, so measuring them
+  first would be measuring with an uncalibrated instrument. One timeboxed experiment
+  (`bench/counter_semantics.py`): read-only / read-write / write-only over a 512 MiB buffer (8.5×
+  L2) with traffic known by construction. The 5.4× stays flagged, scoped exactly as D64 scoped it.
+* **D47 stays armed**, margin 4 %. The next byte win crosses 3× and the composition re-measure
+  runs **N=5 by the licence's own text**, without further adjudication.
+
+## 2026-08-08 — D67: the MMA door, documented before anyone walks through it.
+
+**Pre-registered as conditional.** An MMA/tensor-core step enters **only if** the scalar
+edge-batch plateaus **above eager's per-kernel µs/edge**. It is not an alternative to lever (a)
+and does not fire alongside it.
+
+**Why D22 does not bar it, recorded now rather than argued later.** D22 established that a dense
+WGMMA tile pays quadratically for block-diagonal zeros, and its mechanism was corrected once
+already (`findings/dense-mma-density-argument.md`, "decision upheld, mechanism corrected"). That
+finding is about the **Wigner rotation**, whose operand is block-diagonal — 35 nonzeros of 81 at
+lmax=2, and 969 of 9216 at lmax=8. The SO(2) convolution's per-m channel GEMM is a different
+object: `c1_w1a` is `[j:2, o:128, k:2, c:256]` and is **dense** in `(o, c)`. There is no sparsity
+to pay for, so D22's argument does not reach it.
+
+Recorded now, with the distinction stated, because the failure mode is someone later citing D22 to
+block a step it never applied to — or, worse, citing its absence to wave one through. **The door
+is documented, not opened.**
