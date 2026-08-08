@@ -1772,3 +1772,53 @@ question from whether instruction **traffic** is large.
 never appeared. Launch 1 is `fill_`, identifiable because it shows zero reads. The read-write cell
 of the table is therefore **not measured**; the two cells that answer the question are. Stated
 rather than quietly re-labelled, and the script's docstring is wrong until it is fixed.
+
+## 2026-08-08 — D69: lever (a) designed and pre-registered. `docs/edge_batch_design.md`.
+
+Design first, per the sequencing ruling. Three things the arithmetic settled before any code:
+
+**1. The block shape is 128 threads, not 128 × E_c.** The obvious reading of "edge-batched CTAs"
+exceeds the 1024-thread block limit at `E_c > 8`. Each thread walks `E_c` edges instead.
+
+**2. There is an unavoidable register/reuse tension, and it has no third arrangement.** Capturing
+weight reuse across edges requires the edge loop *inside* the k-tile loop, which requires `E_c`
+accumulator sets live at once. Edges outside would keep registers flat and capture no reuse at
+all. So the sweep is a **byte-saving versus occupancy trade** and the question is where it turns
+over — not whether it helps.
+
+**3. `E_c` = 32 is predicted to be refused by the register guard before launch.** Output is 9 f32
+per thread per edge, so accumulators scale as `9·E_c`; at `E_c`=32 that is 311 against a
+168-register budget. Recorded as a prediction so the refusal is a confirmation rather than a
+surprise. Predicted occupancy: 100 / 50 / 31 / 19 % at `E_c` = 1 / 4 / 8 / 16.
+
+**4. The smem budget is ≤ 14 KiB, not ≤ 48 KiB.** 48 KiB avoids the dynamic-smem opt-in but puts
+the smem limit at 4 blocks/SM, below the measured 16-block register limit — smem becomes binding,
+which is the mechanism that killed `B_smem`. `228/16 ≈ 14 KiB` keeps registers binding. **This
+corrects the ≤48 KiB figure in the ruling**; the intent (occupancy-preserving) is what governs and
+48 KiB does not achieve it.
+
+Interpretation cells fixed in advance: byte-proportional / plateau / **antagonistic** / all-null.
+The antagonistic cell exists because the last factorial had none and I had to admit that
+mid-result. Correctness bar is **bit-equality against `E_c`=1**: tiling on contiguous ranges of the
+contraction axis preserves the emitted summation order, so nothing is loosened.
+
+## 2026-08-08 — D70: code-review verdict accepted. Two consolidation directives open S2.
+
+Sequenced **after** the lever-(a) design and **before** its implementation, so the new emitter
+feature is built on the consolidated substrate instead of becoming a fourth copy of it.
+
+* **D70a — extract the emission substrate.** One shared module for `_sym` / `_ref` /
+  `_chunked_sum` / metadata attachment, with per-template hooks. The motivation is the
+  **keyed-by-identity family's recurrence**: four instances (`vjp.py` `operands.index(k)`,
+  `ir.py`'s validator, `emit_reduce.py`'s buffer→index dict, `emit_tile.py`'s `assigns.index(a)`)
+  in code that had been copied between templates rather than shared. A bug class that recurs
+  across copies is a statement about the copies. `EMITTER_SHA`'s file list shrinks accordingly.
+* **D70b — layout graduates from convention to attribute.** Buffer layout becomes an **IR-level
+  property**, and `compose.transpose_inputs`'s conflict-raise becomes a **layout-assignment step
+  with copy insertion as a costed decision**. Today that raise says "one tensor cannot serve both,
+  and that is a decision, not a default" — which is the right refusal and the wrong long-term
+  answer: the compiler should *make* the decision, costing a copy against the traffic it saves.
+  **Logged as the design seed for S2's joint search, and it is a P2 claim rather than
+  housekeeping**: layout assignment interacts with fusion partitioning and template selection
+  (phase2 amendment) and with the byte model that D59 established as this program's objective
+  function. Choosing layouts jointly with fusion *is* part of the compiler thesis, not a tidy-up.
