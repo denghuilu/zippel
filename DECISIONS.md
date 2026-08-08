@@ -1942,3 +1942,55 @@ comparison reruns the *old emitter* rather than trusting old hashes — before-v
 before-hash-vs-after-source. **The generalisable rule: when a check compares artefacts that embed
 a fingerprint of the thing being checked, the fingerprint must be normalised out or the check is
 testing itself.**
+
+## 2026-08-08 — D75: gate template amended (reviewer defect #9); two patterns join the ledger.
+
+**Condition 1 is henceforth:** *"byte-identical modulo embedded fingerprints, with the before-state
+**regenerated** via stash — never recalled."* Both halves are load-bearing. Normalising the
+fingerprint stops the check testing itself; regenerating rather than recalling means the comparison
+reruns the **old code**, so a stored hash from a superseded snapshot format cannot silently stand
+in for it.
+
+**The fingerprint-normalisation law joins the self-referential-instrument family**, now five:
+D42's 651 ms, D53's traffic model, D57's `ncu` blocker (a query reported as a measurement), D59's
+void discriminator (a rule whose antecedent it never checked), and this.
+
+**Design-for-decidability, logged as a pattern.** *Scope a refactor so that acceptance stays an
+equality check.* Reference case: **retaining the per-template metadata prose.** Unifying it was the
+tidier-looking choice and would have forced acceptance onto "are these differences semantically
+harmless?" — a judgement, arguable, unfalsifiable at scale. Keeping the prose in the templates and
+sharing only the field set, order and formatting kept acceptance at *206 hashes match*. The
+cheaper test was worth more than the tidier diff.
+
+## 2026-08-08 — D76: implementing lever (a) surfaced that **the reuse is intra-thread, not intra-block** — so smem is the wrong vehicle.
+
+The arm was specified as *edge-batched CTAs with k-tiled smem weight staging*. Building it on the
+substrate exposes that the staging half is unnecessary, and for a reason already in the ledger.
+
+**D46's fact, applied to the batched case:** thread `c` reads only weight slice `o = c`. The slice
+is **thread-private**. Batching `E_c` edges into a CTA therefore creates reuse **within one
+thread**, not within the block — the same weight element is wanted by the same thread `E_c` times.
+The vehicle for intra-thread reuse is a **register**, and shared memory has no role: staging would
+copy a thread-private value into a block-shared buffer that no other thread reads.
+
+So the arm becomes **edge-batched CTAs with register-hoisted weight reuse**: emit the weight load
+once, use it `E_c` times. No smem, no barrier, no k-tile, and the ≤14 KiB budget (D69) becomes
+moot. Simpler, and it captures the same `1/E_c` weight-demand reduction the design predicted.
+
+### A practical limit the design did not surface, recorded before the sweep
+
+Register hoisting requires the **edge loop unrolled** — a dynamic loop cannot hold `E_c`
+indexable accumulators in registers. Emission therefore scales as `5 123 × E_c` terms:
+
+| `E_c` | emitted terms | note |
+|---|---|---|
+| 4 | 20 492 | ~4× current compile |
+| 8 | 40 984 | ~8× |
+| 16 | 81 968 | ~16×; `conv1_90` alone already takes minutes at 5 123 |
+| 32 | 163 936 | refused by the register guard regardless (D69) |
+
+The sweep may therefore be bounded by **NVRTC compile time** rather than by registers, which is a
+different limit than the one pre-registered. Plan: measure compile time at `E_c`=4, extrapolate,
+and run what is feasible — printing any un-run arm as **"not run: projected compile time"** with
+the projection, exactly as `E_c`=32's register refusal is printed as a data row. An arm omitted
+without a stated reason is the silent truncation D-numbers ago forbade.
