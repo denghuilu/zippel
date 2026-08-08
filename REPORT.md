@@ -1403,6 +1403,37 @@ delivered its 1.228×, is done.
 every CTA would be 1.31 MB — only 15 % of it. **The traffic is not explained by weight re-reads**,
 and naming what does explain it is the next measurement, not the next assumption.
 
+### 8.5j Post-adoption composition: the forward is 1.441× faster, and the hill is 31 % shorter
+
+The layout requirement (§8.5h, D54) is T2's default emission rule. The whole forward re-measured
+with it, single node, nothing else on the board. **[measurement]**
+
+| fixture | fused pre | fused post | fused gain | eager | speedup pre → post | peak ratio |
+|---|---|---|---|---|---|---|
+| si_medium f32 | 1 401.9 ms | **972.782 ms** | **1.441×** | 49.828 ms | 0.036× → **0.051×** | 1.414× |
+| si_small f32 | 52.8 ms | **38.152 ms** | **1.384×** | 5.965 ms | 0.104× → **0.156×** | 1.393× |
+
+Launch counts (55 fused / 248 eager) and peak-memory ratios are unchanged: layout moves bytes, not
+allocations or kernels.
+
+**The rule generalised, which is the part worth reading.** `conv1_90` — the kernel it was ratified
+on — accounts for only **132.8 ms of the 429.1 ms** recovered. The other **296 ms came from the
+nine further T2 groups** the default reached. Ratified on one kernel, it paid three times over on
+nine others, and held across a 27× change in problem size. That is the out-of-sample confirmation
+D55(b) requires, delivered on wall-clock rather than on a model.
+
+*si_small caveat:* eager drifted 5.50 → 5.965 ms between runs doing identical work, consistent
+with §5's finding that si_small is between-run unstable. Within-run IQR is 0.36 %. Drift-normalised
+the gain is ≈1.50×. The defensible claim is "a gain of the same order as si_medium", not 1.384×.
+
+**The hill.** Eager's full training step at si_medium fp32 is 311.63 ms. The fused forward alone
+was 4.50× that; it is now **3.12×**. **Thirty-one percent of the gap closed by one layout rule, at
+zero runtime cost and bit-exactly** — and §8.5i says the remaining gap is bytes, not layout.
+
+**Still NOT MET.** The S1 wall-clock criterion compares fused against eager *forward*, and 0.051×
+is not 1.0×. What has changed is the shape of the remaining deficit: it is now a measured
+bandwidth problem with a 508× compulsory-traffic headroom, rather than an unattributed one.
+
 ### 8.6 Standing threads
 
 | thread | status |
