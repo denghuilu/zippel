@@ -1855,3 +1855,48 @@ Both are named now so the residual has a route to resolution rather than a perma
 
 **4. Sequencing confirmed and unchanged:** D70a substrate extraction → edge-batch emitter **on the
 shared substrate** → sweep at the 14 KiB target with both guards live.
+
+## 2026-08-08 — D72: BW(occupancy) curve validation, pre-registered.
+
+The sweep produces four (occupancy, achieved-bandwidth) points by construction — `E_c` = 1/4/8/16
+at 100/50/31/19 % occupancy. After fitting `BW(occ)` on **those four alone**, two points already
+measured are checked against the fit **out of sample**:
+
+* **`baseline`** — 96.9 % occupancy, 3.13 TB/s
+* **`B_smem`** — 6.17 % occupancy, 0.68 TB/s
+
+**On-curve** → the occupancy story is closed: bandwidth is a function of occupancy on this
+hardware, `B_smem`'s loss is fully explained by where it sat on that curve, and D64's cross-CTA
+attribution plus D60's ruling both stand without residue.
+
+**Off-curve for `B_smem`** → *itself a finding*, and a sharper one than the fit: it would mean
+something about `B_smem` beyond its occupancy — the barrier, the double-touch, the staging loop —
+costs measurably, which is precisely the branch D59's void discriminator could not decide. The
+question that ended in "flagged for the reviewer" gets answered by arithmetic on a curve fitted
+without it.
+
+`B_smem` is the *only* point that can carry that inference, since it is the sole configuration
+whose occupancy was driven by shared memory rather than registers. Recorded before the fit exists.
+
+## 2026-08-08 — D73: the refactor gate. Defined now, applies to every future consolidation.
+
+D70a is this program's **first pure refactor**, so the gate is written before it rather than
+around it. A consolidation passes only if **all four** hold:
+
+1. **Zero behaviour change.** No emitted kernel differs in any way that changes what it computes.
+2. **Full suite green with an unchanged test count.** Baseline recorded here: **122 tests** across
+   11 files (`anchor_lmax4` 6, `codegen` 8, `environment` 13, `fixtures` 25, `ir_block` 15,
+   `ir_core` 23, `ir_wigner` 5, `pit` 2, `planted_faults` 8, `ref_block` 9, `ref_vs_fairchem` 8).
+   A refactor that *adds* tests is not disqualified, but the count must be explained rather than
+   drift; a refactor that *loses* one has deleted coverage.
+3. **Every planted fault re-fires.** All 7 in `tests/test_planted_faults.py` — dropped term,
+   transposed index, off-by-one channel slice, missing barrier, wrong segment, wrong reduction
+   depth, register-budget refusal. A refactor that silently disarms a fault detector is worse than
+   one that breaks a kernel, because the next real bug then passes.
+4. **`EMITTER_SHA` rolls exactly once.** Before: **`f61e41b96ba1ddf5`** over
+   `(emit, emit_tile, emit_reduce, schedule, tile, bounds)`. It must change (the file list itself
+   shrinks) and must then be *stable* — a SHA that keeps moving means the substrate is still being
+   edited and the refactor has not converged.
+
+The pre-refactor suite is being run now to establish (2) and (3) as **green before**, not merely
+assumed green. A gate that compares against an unverified baseline proves nothing.
