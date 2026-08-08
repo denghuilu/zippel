@@ -1354,3 +1354,37 @@ needs to know what they were a substitute *for*.
 
 The DCGM calibration is not withdrawn — it measured what it measured, at 0.4 % residual against
 known traffic. What is withdrawn is the framing that it was necessary.
+
+## 2026-08-08 — D58: revalidation after the layout rule — 47/47 emittable groups correct. And `max_volume` turns out to be a correctness precondition.
+
+    47 correct, 1 failed, 0 skipped of 48 groups
+    cost ledger: schedule=20.9s emit=0.1s compile=468.8s guard=22.1s  guard=4.3% of build
+
+**The one failure is not a regression, and the check that establishes that is worth stating.** The
+layout rule touches T2 only (`emit_tile_source`); `g35` is **T3**. The previous run recorded it as
+`"status": "skipped"` — it had **never been validated at all**, having been excluded by
+`--max-terms`; this run simply did not pass that flag. What it hit is the T3 register guard, which
+refuses it at **2 307 live scalars per thread** against a 168-register budget. The guard working,
+on a group nobody had ever asked it about.
+
+**Verified rather than assumed** that this cannot reach the composed program:
+
+| grouping | groups | largest | refused |
+|---|---|---|---|
+| `validate_groups` (uncapped, `max_volume=None`) | 48 | 23 040 terms | **1** |
+| composed program (`max_volume=10 000`) | 55 | 5 123 terms | **0** |
+
+So the layout rule revalidates at **47 of 47 emittable groups**, and the composed program is clean.
+
+**The finding underneath it.** `DEFAULT_MAX_VOLUME = 10_000` was adopted as a *heuristic* — a cap
+on fusion width to bound compile time and register pressure. It is in fact a **correctness
+precondition**: with the cap removed, one group of the forward program is unschedulable under any
+template the router selects for it. This is the same coupling the phase2 amendment already
+recorded ("fusion partitioning and template selection are coupled"), now with a concrete instance
+and a number. A future change that raises `max_volume` to chase fusion benefit must re-run the
+guards, not merely re-measure — the failure mode is a refusal at emission if the guard holds, and
+a silent spill if anyone ever removes it.
+
+Registered as an out-of-sample check in the D55 sense: the layout rule was ratified on `conv1_90`
+and has now been emitted, guarded and validated on nine further T2 groups without a single
+correctness failure.
