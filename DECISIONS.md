@@ -1282,3 +1282,55 @@ does not care whether the staged bytes are weights or input rows. It is not canc
 rows are per-edge and much smaller, so the capacity arithmetic differs — but it should be preceded
 by the ncu run rather than launched blind into the same wall. Flagged for the reviewer's call
 rather than decided here.
+
+## 2026-08-08 — D54: rulings applied. A ratified, B struck, input-row staging HELD behind ncu.
+
+* **A ratified.** Thread-mapped axis innermost is **T2's layout requirement**. To be applied to
+  `conv2_95` (344.7 ms) and `conv1_m0_86` (190.5 ms), then the post-adoption composition
+  re-measure. **D47's expiry clause evaluates on that number**: within 3x of any comparator and
+  the single-node licence expires by its own condition, forcing N=5.
+* **B struck.** Shared-memory staging leaves the T2 rule entirely.
+* **Input-row staging HELD behind ncu, with re-entry pre-registered**: it **revives** iff B's loss
+  attributes to capacity-driven occupancy collapse, and **dies** iff it attributes to
+  barrier/double-touch. **No third option.** The discriminator is fixed quantitatively in
+  `bench/ncu_profile.py` row 2 before any counter exists — an occupancy account must predict
+  B's 1 852.1 ms within 1.5x from the measured occupancy ratio, or it does not get the outcome.
+
+## 2026-08-08 — D55: model self-check law.
+
+**An attribution model may not be cited as evidence until it has (a) passed a physical-bound
+check and (b) reproduced one out-of-sample kernel.** Agreement with the kernel it was built on is
+not evidence — it is the fit.
+
+Both halves are drawn from failures already in this ledger:
+* **(a) physical bound.** D53's traffic model predicted 5 611.8 ms for a kernel measured at
+  714.8 ms. A floor the measurement beats is not a floor, and that check costs one comparison and
+  would have killed D42's 651 ms on the day it was written. Now implemented as a hard refusal in
+  `bench/s1c_issue_floor.py`: no per-arm attribution is printed when the baseline check fails.
+* **(b) out-of-sample.** D42's 651-vs-714.8 was a single-point agreement on the one kernel the
+  model was constructed around. `conv2_95` and `conv1_m0_86` were available the entire time and
+  were never used. One out-of-sample kernel would have exposed it.
+
+Retroactive scope: every existing causal claim carrying a model — the traffic model (**refuted**,
+D53), the issue-bound estimate (**passes (a)**: 10.2 ms floor under a 582 ms measurement;
+**untested on (b)**, so it may be cited only as a bound, never as an attribution) — is re-labelled
+accordingly in REPORT.
+
+## 2026-08-08 — D56: ncu acquired. No permission blocker.
+
+`ncu` is absent from PATH, from the module system, and from `/usr/local|/opt|/apps`. It **is**
+present at **Nsight Compute 2025.2.0** inside the uenv images, each shipping its own CUPTI:
+
+    prgenv-gnu/25.6:v2       /user-environment/env/._default/.../bin/ncu   (chosen -- smallest)
+    prgenv-nvfortran/25.7:v2 /user-environment/env/._nvfort/.../bin/ncu
+    pytorch/v2.8.0:v1        /user-environment/env/._default/.../bin/ncu
+
+**`RmProfilingAdminOnly: 0`** on nid005562 — counter access is open to non-root. **No blocker to
+report.** Verified before writing the driver that the conda env on `/iopsstor` stays visible under
+the uenv mount and that torch 2.13.0+cu130 initialises CUDA normally there (`cuda True`,
+`NVIDIA GH200 120GB`).
+
+Driver launches one warm launch per arm outside the profiled region and exactly three inside it,
+gated by `--profile-from-start off` against `torch.cuda.profiler.start()`, so no torch setup work
+enters the report. `A_matched` and `AB_both` are omitted: they were controls to make B readable
+and address no row of the adjudication table.
