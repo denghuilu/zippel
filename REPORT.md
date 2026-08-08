@@ -1054,7 +1054,18 @@ per-group DRAM **byte** model (D27). It is calibrated before it decides anything
 known traffic and observing the response, and the model corrected by changing the model and
 re-measuring.
 
-**Blocker: `ncu` and CUPTI are not installed on this system.** `nvidia-cuda-cupti-cu13` resolves
+> **CORRECTION (2026-08-08, D56): this blocker no longer holds, and was narrower than stated.**
+> `ncu` is not on `PATH`, in the module system, or under `/usr/local|/opt|/apps` — but it **is**
+> present as **Nsight Compute 2025.2.0, with its own CUPTI**, inside every uenv image on Alps
+> (`prgenv-gnu/25.6:v2`, `prgenv-nvfortran/25.7:v2`, `pytorch/v2.8.0:v1`). `RmProfilingAdminOnly`
+> is `0`, so counter access is open to non-root. The conda env on `/iopsstor` stays visible under
+> the uenv mount and torch initialises CUDA there normally. What follows was therefore built on a
+> substitute instrument that was never necessary — the sentence below said "not installed on this
+> system" when what had been established was "not on PATH". **A search that could not have found
+> the thing is not evidence of absence** (`findings/cute-dsl-cache-dir-is-a-noop.md`, same lesson,
+> second occurrence).
+
+**Blocker (SUPERSEDED): `ncu` and CUPTI are not installed on this system.** `nvidia-cuda-cupti-cu13` resolves
 only to a 0.0.1 stub and `libcupti.so` does not load. `dcgmi` is present, so the substitute is
 DCGM's `dram_active` counter. Being coarser, the *instrument* is calibrated first against
 `copy_` at known traffic: the raw counter reads a consistent −16 % against the device's 4.0 TB/s
@@ -1289,9 +1300,61 @@ instructions → 5.32e9 warp loads → 20 ms coalesced → **×32 = 651 ms uncoa
 **714.8 ms measured**. Nine percent apart with no fitted parameter, and no rival hypothesis within
 an order of magnitude.
 
+> **CORRECTION (2026-08-08, D53): the 651-vs-714.8 agreement was coincidence, and the paragraph
+> above overclaims.** The intervention was run (§8.5h). Removing the access pattern on all four
+> offending operands recovers **132.8 ms — 18.6 %**, not the ~630 ms this model implies. Worse, the
+> same model applied honestly across all operands predicts **5 611.8 ms for a kernel measured at
+> 714.8 ms**: it is beaten by its own baseline by 7.9×, and a floor the measurement beats is not a
+> floor. Two compounding errors: the four weights total 1.25 MB and are **L2-resident** in a 60 MiB
+> L2, so they were never DRAM traffic; and the read count is *textual factor occurrences*, not
+> issued loads. "No rival hypothesis within an order of magnitude" was true and irrelevant — the
+> right rival was that the model itself was wrong. **[refuted]**
+
 That makes the S1 wall-clock deficit a *layout and staging* problem in one template, not a
 property of the fused approach — which is a considerably better position than the headline
 0.036× suggests, and is the subject of the next intervention.
+
+### 8.5h The conv1_90 factorial: one lever ratified, one struck, two models refuted
+
+Five arms on `conv1_90`, si_medium fp32, interpretation rules fixed in the bench docstring before
+any number existed. **[intervention]**
+
+| arm | ms | speedup | bit-equal to baseline |
+|---|---|---|---|
+| baseline | 714.819 | 1.000× | — (reference) |
+| **`A_transpose`** — thread axis innermost, 4 operands | **582.023** | **1.228×** | yes |
+| `A_matched` — same, restricted to what B can stage | 709.056 | 1.008× | yes |
+| `B_smem` — padded cooperative staging | 1852.103 | 0.386× | yes |
+| `AB_both` | 2207.927 | 0.324× | yes |
+
+Every arm is correct — err 1.557e-06 against a 1.024e-03 bound — so **every loss is a real loss,
+not a broken kernel**. Baseline reproduced to 0.041 % across two runs and to four significant
+figures against §8.5g's independent profiler pass: three measurements, two harnesses, three
+compilations.
+
+**Ratified.** Thread-mapped axis innermost is now T2's **default emission rule**. It covers **10 of
+24 T2 groups**, and every operand it names is a *program input*, so the permutation happens once at
+allocation and costs nothing per launch — no capacity limit, no barrier, no runtime cost.
+
+**Struck.** Shared-memory staging leaves the rule entirely. Its padding was pre-registered as
+load-bearing and verified by emission (1 bank unpadded vs 32 padded), which is what earns the
+right to read its loss as a fact about staging rather than an artefact.
+
+**Two predictions of mine failed, and they are the more useful result.**
+1. I recorded 1725.1 ms for `AB_both` on an additivity assumption; it measured 2207.9 — the levers
+   interact *antagonistically*, with transposition saving 132.8 ms alone and costing 355.8 ms on
+   top of staging. A sign flip, not a magnitude error.
+2. The traffic model is refuted by its own baseline (above), and the issue-bound floor is 10.2 ms
+   against a 582 ms winner — **57× below, so not binding either**. Neither static model explains
+   the remaining time.
+
+**D55, model self-check law.** An attribution model may not be cited as evidence until it has
+(a) passed a physical-bound check and (b) reproduced one out-of-sample kernel. Agreement with the
+kernel it was built on is the fit, not evidence. Applied retroactively: the **traffic model is
+refuted**; the **issue-bound estimate passes (a) but is untested on (b)**, so it may be cited as a
+bound and never as an attribution. `bench/s1c_issue_floor.py` now refuses to print any per-arm
+attribution when the baseline check fails — the guard would have killed the 651 ms figure on the
+day it was written.
 
 ### 8.6 Standing threads
 

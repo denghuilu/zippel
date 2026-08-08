@@ -1334,3 +1334,23 @@ Driver launches one warm launch per arm outside the profiled region and exactly 
 gated by `--profile-from-start off` against `torch.cuda.profiler.start()`, so no torch setup work
 enters the report. `A_matched` and `AB_both` are omitted: they were controls to make B readable
 and address no row of the adjudication table.
+
+## 2026-08-08 — D57: the ncu blocker in REPORT 8.5c was never true, and the search that established it could not have found the thing.
+
+REPORT 8.5c states, as the premise of an entire subsection: *"`ncu` and CUPTI are not installed on
+this system."* That is false, and D56 found the toolkit in under an hour. What had actually been
+established was **"not on PATH and not pip-installable"**; what was written was a claim about the
+system. The DCGM substitute instrument, its calibration against `copy_`, and the fitted constant
+`K = 4.777e12` were all built on a blocker that did not exist.
+
+**This is the second occurrence of one lesson.** `findings/cute-dsl-cache-dir-is-a-noop.md`
+records exactly this: a literal grep against a dynamically-constructed name, reported as
+"appears zero times in the package", which was a property of my query rather than of the package.
+Here the query was `command -v ncu` plus a pip resolve, and Alps ships its toolchains through
+uenv images that neither can see. **Absence of evidence from a search is evidence of absence only
+if the search could have found the thing.** The correction is filed in REPORT 8.5c rather than
+quietly fixed, because the substitute instrument's numbers are still cited elsewhere and a reader
+needs to know what they were a substitute *for*.
+
+The DCGM calibration is not withdrawn — it measured what it measured, at 0.4 % residual against
+known traffic. What is withdrawn is the framing that it was necessary.
