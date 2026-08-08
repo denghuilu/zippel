@@ -2224,3 +2224,55 @@ before the numbers arrive so the exclusion cannot be applied selectively afterwa
 while they run → (3) ncu adjudication → (4) route-C probe under the new harness → (5) reopened
 sweep cells or the two-conv generalisation → composition at N=5. **MMA pre-registration drafts
 only after (3).**
+
+## 2026-08-08 — D84: compile census. **Kernel-level pooling is capped at 1.6×.** Measured, not assumed.
+
+Item 2(i) of the parallel-compile directive, from `codegen/costs.py` data already on disk
+(si_small f64, 48 groups, `bench/results/validate_fwd_si_small.json`):
+
+| phase | s | share |
+|---|---|---|
+| **`cute.compile`** (trace + backend) | **468.8** | **91.6 %** |
+| guard | 22.1 | 4.3 % |
+| schedule | 20.9 | 4.1 % |
+| emit | 0.1 | 0.0 % |
+| total | 511.9 | |
+
+**Compile is 91.6 % of build time — the target is right.** But its *distribution* is not what the
+directive's premise assumed:
+
+| compile s | share | cum | terms | group |
+|---|---|---|---|---|
+| 290.7 | **62.0 %** | 62.0 % | 5 132 | g40 (T2) |
+| 78.3 | 16.7 % | 78.7 % | 2 653 | g42 (T2) |
+| 71.6 | 15.3 % | **94.0 %** | 1 152 | g43 (T3) |
+
+Median **0.19 s**, mean **9.98 s** — heavy-tailed to the point that **three kernels are 94 %** and
+one is 62 %.
+
+**Therefore: `ProcessPoolExecutor` over kernels — option (ii)'s first branch — has an Amdahl
+ceiling of `468.8 / 290.7 = 1.6×`, and no worker count changes that.** The ceiling is
+scale-invariant, so batching (which multiplies every kernel's compile) does not raise it either.
+
+**The premise half-holds and the inference does not.** Cores *are* idle — 72 per module against a
+single-threaded ptxas. But kernels are **not** queuing behind each other: there is essentially
+**one** kernel, and 71 idle cores cannot help compile it. Work that is not divisible that way
+cannot be harvested that way.
+
+**So the harness form is decided by measurement rather than by the serializability test.** Option
+(ii)'s *second* branch — **shard at arm/job level, each arm compiling and measuring in its own
+process** — is the correct form, and it is already in use: the three-arm ncu adjudication running
+now cost 56 min against 78 serial. The `cute.compile`-returns-an-in-process-callable question is
+**moot for the chosen form** and is not worth the probe it was allocated; noted rather than run.
+
+**What actually attacks the 290.7 s**, in order of measured promise:
+1. **Route C** — smaller IR for the backend to chew. Pre-registered in D77 for a different reason;
+   this makes it the primary compile lever rather than a curiosity.
+2. **Splitting the dominant group** via a lower `max_volume` — cheaper compile, but it changes
+   fusion and therefore performance, so it is a trade and not a free win. D58 established the cap
+   is already a correctness precondition; lowering it further is permitted, raising it is not.
+3. Arm/job-level parallelism — real but bounded by the number of independent jobs, not by cores.
+
+**Ledger honesty (directive 2iv), adopted:** compile **wall-clock** and **CPU-seconds** are
+separate columns from here. Parallelism improves the first and never the second. R9's account is
+kept in both, and the 1.6× ceiling is a statement about the first only.
