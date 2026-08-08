@@ -2084,3 +2084,21 @@ accumulators. D69's prediction that `E_c`=32 would be refused survives; its clai
 fits does not, and that is a **correction to a pre-registration, made before the measurement rather
 than after**. The refusal rows printed in the results table will therefore be `E_c`=16 at
 `CHUNK`=48 and `E_c`=32 at any `CHUNK` — both as data, with the arithmetic beside them.
+
+## 2026-08-08 — D79: sweep shape and the conditional control cell.
+
+* **Frontier walk, not grid.** Climb the `E_c` ladder at `CHUNK`=48 until the register guard
+  refuses; drop `CHUNK` only where forced. Both refusals print with their arithmetic as data rows:
+  **`E_c`=16 @ `CHUNK`=48 (192 > 168)** and **`E_c`=32 @ any `CHUNK` (≥ 304)**.
+* **One control cell, conditional.** If the frontier forces a `CHUNK` drop, measure **`E_c`=8 at
+  both `CHUNK`=48 and 16** — both fit (120 / 88), so the comparison is available rather than
+  inferred. Pre-registered reading: **`CHUNK` effect ≈ 0** → the `E_c`=16 @ `CHUNK`=16 number is
+  attributable to `E_c` alone; **effect ≠ 0** → `CHUNK` joins the treatment set and the results
+  table says so rather than reporting a two-factor change as one.
+* **SASS attribution unchanged**: registers from `ncu`, the hoist from disassembly, nothing claimed
+  from compile time.
+
+**Ledger note (reviewer's):** two consecutive defects — D78's register model and D76's smem
+mis-vehicle — died at emission-structure derivation, **zero GPU minutes spent**. The
+error-mortality curve keeps shifting left: from post-measurement retraction (D42, D53), to
+pre-fire (D64), to pre-implementation (D76), to pre-emission (D78).

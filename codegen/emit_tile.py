@@ -49,7 +49,8 @@ def _sym(buf: str, idx: tuple) -> str:
     return sym(buf, idx, render=_name_part)
 
 
-def _ref(prog: Program, buf: str, idx: tuple, transpose: dict | None = None) -> str:
+def _ref(prog: Program, buf: str, idx: tuple, transpose: dict | None = None,
+         edge: str | None = None) -> str:
     """A memory reference. `transpose[buf]` permutes the trailing axes of the reference.
 
     The permutation is a *layout* change, applied identically to the emitted index order and to
@@ -58,7 +59,11 @@ def _ref(prog: Program, buf: str, idx: tuple, transpose: dict | None = None) -> 
     2 048 B apart and every warp load touches 32 cache lines (D42). Moving that axis last makes
     the same reads contiguous.
     """
-    return ref(prog, buf, idx, render=_index_part, perm=(transpose or {}).get(buf))
+    lead = None
+    if edge is not None and prog.type_of(buf).segment != "none":
+        lead = edge                              # edge-batched: this copy's own segment index
+    return ref(prog, buf, idx, lead=lead, render=_index_part,
+               perm=(transpose or {}).get(buf))
 
 
 #: Shared memory is 32 banks of 4 B. A stride that is a multiple of 32 words maps every lane of a
@@ -176,7 +181,8 @@ def _staged_ref(buf: str, idx: tuple, lay: dict) -> str:
 
 
 def _factor(prog: Program, buf: str, idx: tuple, from_smem: bool, live_in: set,
-            transpose: dict | None = None, staged: dict | None = None) -> str:
+            transpose: dict | None = None, staged: dict | None = None,
+            edge: str | None = None) -> str:
     if staged and buf in staged:
         return _staged_ref(buf, idx, staged[buf])
     if from_smem:
@@ -188,14 +194,160 @@ def _factor(prog: Program, buf: str, idx: tuple, from_smem: bool, live_in: set,
         # valid: `xedge_7` concatenates three operands, and thread c<64 reading `emb_src[e,c-64]`
         # is an out-of-bounds negative index. Inlining puts every load inside the branch that
         # guarantees its range; NVRTC re-materialises common subexpressions within a block.
-        return _ref(prog, buf, idx, transpose)
-    return _sym(buf, idx)
+        return _ref(prog, buf, idx, transpose, edge=edge)
+    return _sym(buf, idx) + (f"_e{edge[1:]}" if edge is not None and buf not in live_in else "")
+
+
+def _edge_independent(prog: Program, buf: str) -> bool:
+    """Does this operand's value depend on which edge we are computing?
+
+    `none`-segment operands — every weight — do not: they are the same tensor for every edge, so
+    with `E_c` edges batched into one thread their loads are **loop-invariant** and can be issued
+    once. That is the entire mechanism of lever (a), and it is a property of the *segment*, not of
+    the buffer's name or size.
+    """
+    return prog.type_of(buf).segment == "none"
+
+
+def _batched_lines(prog, sched, a, uid: int, E_c: int, chunk: int, dt: str,
+                   live_in: set, transpose, staged) -> list[str]:
+    """One assignment, `E_c` edges, weights loaded once and applied to all of them.
+
+    The interleaving is what captures the reuse: a weight temporary is emitted, used by every
+    edge, and then overwritten by the next term's. Chunking it keeps the statement count at
+    `(N/chunk)·(chunk + E_c)` instead of the `N·(1+E_c)` a naive interleave would emit — 5 600
+    against 25 600 at `E_c`=4 — which is the difference between tractable and not (D78).
+
+    Register cost is `chunk` weight temporaries plus `E_c` accumulator sets, which is why `chunk`
+    is a sweep axis and not a constant.
+
+    **Summation order is preserved per (assignment, edge)**: terms accumulate in their original
+    order within each edge's chain, so bit-equality against `E_c`=1 is the correctness bar.
+    """
+    out: list[str] = []
+    targets = [f"{_sym(a.target, a.index)}_e{ei}" for ei in range(E_c)]
+    if a.fn is not None:                                   # scalar map: no contraction to batch
+        for ei in range(E_c):
+            src = a.source
+            arg = (_ref(prog, src[0], src[1], transpose, edge=f"e{ei}") if src[0] in live_in
+                   else f"{_sym(*src)}_e{ei}")
+            out.append(f"{targets[ei]} = {_scalar(a.fn, arg, dt)}")
+        return out
+    if not a.terms:
+        return [f"{t} = {dt}(0.0)" for t in targets]
+
+    for start in range(0, len(a.terms), chunk):
+        block = a.terms[start:start + chunk]
+        wnames = {}
+        for j, t in enumerate(block):
+            wf = [(b, ix, sm) for b, ix, sm in t.factors if _edge_independent(prog, b)]
+            if not wf:
+                continue
+            wnames[j] = f"_w{uid}_{start}_{j}"
+            expr = " * ".join(_factor(prog, b, ix, sm, live_in, transpose, staged)
+                              for b, ix, sm in wf)
+            out.append(f"{wnames[j]} = {expr}")
+        for ei in range(E_c):
+            parts = []
+            for j, t in enumerate(block):
+                ef = [(b, ix, sm) for b, ix, sm in t.factors if not _edge_independent(prog, b)]
+                pieces = ([wnames[j]] if j in wnames else []) + [
+                    _factor(prog, b, ix, sm, live_in, transpose, staged, edge=f"e{ei}")
+                    for b, ix, sm in ef]
+                fs = " * ".join(pieces) if pieces else f"{dt}(1.0)"
+                parts.append(fs if t.coeff == 1.0 else
+                             (f"-({fs})" if t.coeff == -1.0 else f"{dt}({t.coeff!r}) * {fs}"))
+            acc = ([targets[ei]] if start else []) + parts
+            out.append(f"{targets[ei]} = " + " + ".join(acc))
+    return out
+
+
+def smem_decls_of(sched, staged: dict, dt: str, C: int) -> str:
+    return "\n".join(
+        [f"        s_{b} = smem.allocate_tensor({dt}, cute.make_layout({C}), 16)"
+         for b in sched.staged]
+        + [f"        sh_{b} = smem.allocate_tensor({dt}, "
+           f"cute.make_layout({lay['extent'] * lay['T']}), 16)"
+           for b, lay in staged.items()])
+
+
+def _render(prog, sched, spec, dt, C, esha, depth, tensors, params, body, smem_decls,
+            transpose, staged, smem_bytes, E_c: int, chunk: int, route: str) -> str:
+    """Render the edge-batched kernel. `E_c` edges per thread; grid shrinks by the same factor.
+
+    The tail is handled by **clamping the read index and guarding only the store**: a thread whose
+    edge is past the end recomputes edge `n_seg-1` and discards it. Predicating the arithmetic
+    instead would put a branch inside the interleaved accumulation and break the very structure
+    that captures the reuse.
+    """
+    _extra = "\n" + T2_TRANSPOSE_NOTE + (
+        f"\nTRANSPOSE = {transpose!r}\nSTAGED = {list(staged)!r}")
+    _meta = metadata_block(spec.segment, "T2", esha, depth, False,
+                           notes=T2_NOTES, after_sha=_extra)
+    idx_lines = []
+    for ei in range(E_c):
+        idx_lines.append(f"        g{ei} = eb * {E_c} + {ei}")
+        idx_lines.append(f"        e{ei} = g{ei}")
+        idx_lines.append(f"        if e{ei} >= n_seg:")
+        idx_lines.append(f"            e{ei} = n_seg - 1")
+    indented = textwrap.indent("\n".join(body), " " * 8)
+    weight_names = ", ".join(b for b in spec.live_in
+                             if prog.type_of(b).segment == "none") or "(none)"
+    transposed_names = ", ".join(f"{b}{tuple(pp)}" for b, pp in transpose.items()) or "(none)"
+    arglist = ", ".join(f"m_{b}" for b in tensors)
+    return f'''"""Generated by codegen/emit_tile.py from fusion group {spec.name} (template T2).
+
+{spec}
+  channel axis {sched.axis} of extent {C} on threads; {sched.n_values} values,
+  {sched.n_terms} terms. EDGE-BATCHED: {E_c} edges per thread, chunk {chunk}, route {route!r}.
+  Weights ({weight_names})
+  are `none`-segment, hence loaded once per term block and applied to all {E_c} edges -- the reuse
+  is intra-thread, so a register is the vehicle and shared memory would stage for an audience of
+  one (D76).
+  Operands transposed: {transposed_names}
+"""
+
+import cutlass
+import cutlass.cute as cute
+import cutlass.utils as cutlass_utils
+from cutlass import Float32, Float64, Int32, const_expr
+from cutlass.cute.runtime import from_dlpack
+
+CHANNELS = {C}
+EDGE_BATCH = {E_c}
+CHUNK_TERMS = {chunk}
+UNROLL_ROUTE = "{route}"
+TENSOR_ORDER = {tensors!r}
+
+{_meta}
+
+
+class Kernel:
+    """One CTA per {E_c} {spec.segment}s, one thread per channel."""
+
+    @cute.jit
+    def __call__(self, {params}, n_seg: Int32, stream):
+        n_blocks = (n_seg + {E_c - 1}) // {E_c}
+        self.kernel({arglist}, n_seg).launch(
+            grid=[n_blocks, 1, 1], block=[CHANNELS, 1, 1], stream=stream)
+
+    @cute.kernel
+    def kernel(self, {params}, n_seg: Int32):
+        c, _, _ = cute.arch.thread_idx()
+        eb, _, _ = cute.arch.block_idx()
+        smem = cutlass_utils.SmemAllocator()
+{smem_decls}
+{chr(10).join(idx_lines)}
+{indented}
+'''
 
 
 def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
                      budget: int = REGISTER_BUDGET,
                      transpose: dict | None = None,
-                     stage_shared: tuple = ()) -> str:
+                     stage_shared: tuple = (),
+                     edge_batch: int = 1, chunk: int = CHUNK,
+                     route: str = "text") -> str:
     spec = sched.spec
     dt = DTYPE[dtype]
     C = sched.extent
@@ -206,11 +358,15 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
     # spilled would have done so silently -- luck, not a guard. The bound is the inlined-load
     # form (codegen/bounds.py), an upper bound by construction per D26.
     live = inlined_live_upper_bound(sched)
+    if edge_batch > 1:
+        # D78: batching holds `chunk` weight temporaries and `E_c` accumulator sets at once. The
+        # unbatched bound already counts one set, so the extra is (E_c - 1) sets plus the temps.
+        live = live * edge_batch + chunk
     if live > budget:
         raise ValueError(
-            f"group {spec.name} needs up to {live} live scalars per thread under T2, over the "
-            f"{budget} register budget -- it would spill to local memory. Split the group, or "
-            f"stage its operands rather than holding them.")
+            f"group {spec.name} needs up to {live} live scalars per thread under T2 at "
+            f"edge_batch={edge_batch}, chunk={chunk}, over the {budget} register budget -- it "
+            f"would spill to local memory. Reduce edge_batch, reduce chunk, or split the group.")
 
     tensors = [b for b in spec.live_in if not isinstance(prog.type_of(b), IndexType)]
     tensors += list(spec.live_out)
@@ -297,6 +453,31 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
         by_value[key].append((pos, a))
 
     emitted = 0
+    if edge_batch > 1:
+        # Edge-batched: one thread walks `edge_batch` edges, weights loaded once per term block
+        # and applied to all of them (D76 -- the reuse is intra-thread, so the vehicle is a
+        # register and not shared memory).
+        for key in order_keys:
+            for _pos, a in by_value[key]:
+                if a.ch_range is not None:
+                    raise ValueError(
+                        f"group {spec.name} has a channel-ranged assignment; edge batching does "
+                        f"not yet emit the if/elif chain per edge. Unbatched emission handles it.")
+                body.extend(_batched_lines(prog, sched, a, emitted, edge_batch, chunk, dt,
+                                           live_in, transpose, staged))
+                emitted += 1
+        for buf in spec.live_out:
+            t = prog.type_of(buf)
+            ranges = [(CH,) if k == sched.axis else range(s_) for k, s_ in enumerate(t.sizes)]
+            for idx in itertools.product(*ranges):
+                idx = tuple(idx)
+                for ei in range(edge_batch):
+                    body.append(f"if g{ei} < n_seg:")
+                    body.append("    " + _ref(prog, buf, idx, edge=f"e{ei}")
+                                + f" = {_sym(buf, idx)}_e{ei}")
+        return _render(prog, sched, spec, dt, C, _esha, depth, tensors, params, body,
+                       smem_decls_of(sched, staged, dt, C), transpose, staged, smem_bytes,
+                       edge_batch, chunk, route)
     for key in order_keys:
         group = by_value[key]
         idx_in_sched = group[0][0]
