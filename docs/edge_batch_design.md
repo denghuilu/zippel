@@ -34,8 +34,18 @@ thread walks `E_c` edges.
 **The unavoidable tension, stated now.** Weight reuse across edges requires the *edge* loop inside
 the *k-tile* loop, which requires **`E_c` accumulator sets live simultaneously**. Putting edges
 outside instead would keep registers flat but re-stage the weights per edge and capture no reuse
-at all. There is no third arrangement; the sweep is therefore a **byte-saving versus
-register/occupancy trade**, and the interesting question is where it turns over.
+at all. The sweep is therefore a **byte-saving versus register/occupancy trade**, and the interesting
+question is where it turns over.
+
+**Footnote on the arrangement space, so it reads as swept rather than unseen.** Two further
+arrangements exist and are excluded *ex ante* by the byte currency itself, not overlooked:
+**split-K** (partition the contraction across CTAs, then combine) writes and re-reads partial
+sums, and **smem-resident accumulators** (hold `acc[e_local]` in shared memory instead of
+registers, lifting the register cap) spends the very smem the weight tile needs and adds
+smem↔register traffic per k-tile. Both **add** traffic in the currency D59 established as the
+objective function, so neither can win a byte-bound contest by construction. An earlier draft of
+this document said "there is no third arrangement", which was wrong — there are others, and they
+lose on the criterion rather than not existing.
 
 **Tile order preserves summation order.** The emitted terms already run in increasing contraction
 index (`_s7_0 = … w[c*257+0] + … w[c*257+1] + …`), and `_chunked_sum` accumulates left to right.
@@ -107,7 +117,14 @@ interpolation between two measurements and nothing more.
 
 ## Guards active throughout
 
-* register bound (`inlined_live_upper_bound` × `E_c` accumulator sets) — refusal is data
+* register bound (`inlined_live_upper_bound` × `E_c` accumulator sets) — **refusal is data and
+  appears as a row in the results table**, not as an omission
+* **measured achieved DRAM bandwidth logged per arm.** Free byproduct worth more than the sweep:
+  with occupancy known per `E_c` by construction (100/50/31/19 %) and bandwidth measured at each,
+  the sweep yields **BW(occupancy) for this hardware** — the missing function in every bytes-law
+  prediction, since `t = bytes(E_c) / BW(occ(E_c))` has so far had to interpolate between two
+  points (`B_smem` at 6.17 % → 0.68 TB/s, baseline at 96.9 % → 3.13 TB/s). Reusable far beyond
+  this kernel and beyond this program's kernels generally
 * occupancy accounting against the 16-block register limit, reported per `E_c`
 * ordering bound + **bit-equality against `E_c`=1**, since tile order preserves summation order
 * planted-fault check, per standing practice, to prove the bar discriminates

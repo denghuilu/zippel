@@ -1822,3 +1822,36 @@ feature is built on the consolidated substrate instead of becoming a fourth copy
   housekeeping**: layout assignment interacts with fusion partitioning and template selection
   (phase2 amendment) and with the byte model that D59 established as this program's objective
   function. Choosing layouts jointly with fusion *is* part of the compiler thesis, not a tidy-up.
+
+## 2026-08-08 — D71: three additions to the lever-(a) pre-registration, and one correction to it.
+
+**1. Achieved DRAM bandwidth logged per arm — the byproduct is worth more than the sweep.**
+Occupancy per `E_c` is known by construction (100 / 50 / 31 / 19 %) and bandwidth is measured at
+each, so the sweep yields **BW(occupancy) for this hardware**. That is the missing function in
+every bytes-law prediction: `t = bytes(E_c) / BW(occ(E_c))` has until now had to interpolate
+between exactly two measured points — `B_smem` at 6.17 % → 0.68 TB/s and baseline at 96.9 % →
+3.13 TB/s. Four more points turn an interpolation into a curve, and it is reusable well beyond
+this kernel.
+
+**2. Arrangement space, footnoted so it reads as swept.** **Split-K** (partition the contraction
+across CTAs, combine after) writes and re-reads partial sums; **smem-resident accumulators** (lift
+the register cap by holding `acc[e_local]` in shared memory) spend the smem the weight tile needs
+and add smem↔register traffic per k-tile. **Both add traffic in the currency D59 established as
+the objective function**, so neither can win a byte-bound contest by construction.
+
+**Correction to my own text.** The design said *"there is no third arrangement"*. That was wrong:
+there are others, and they lose **on the criterion** rather than not existing. Overstating a
+search as exhaustive when it was merely decided is the same error class as calling a query a
+measurement (D57), at a smaller scale.
+
+**3. D68's follow-up probes, parked with levers (b)/(c).** For whenever the 3.6 % — 3.6× —
+residual becomes load-bearing, not now:
+* **strided-read probe** — does `lts__t_sectors_op_*` inflate beyond the calibrated 1.50× under
+  non-contiguous access? The calibration used a pure streaming read; `conv1_90` is neither.
+* **partial-sector store probe** — read-for-merge at L2 on sub-sector writes, which the `fill_`
+  variant (full-sector, no write-allocate) could not have detected.
+
+Both are named now so the residual has a route to resolution rather than a permanent asterisk.
+
+**4. Sequencing confirmed and unchanged:** D70a substrate extraction → edge-batch emitter **on the
+shared substrate** → sweep at the 14 KiB target with both guards live.
