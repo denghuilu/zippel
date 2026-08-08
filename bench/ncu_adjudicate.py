@@ -42,6 +42,8 @@ def load(path: pathlib.Path) -> dict[str, dict[str, float]]:
     per_launch: dict[int, dict[str, float]] = {}
     with path.open() as fh:
         rows = list(csv.DictReader(fh))
+    # `--page details --csv` is long format (one row per metric); `--page raw --csv` is wide
+    # (823 columns) and cannot be read this way. The wide export is what the first run produced.
     idcol = next((c for c in rows[0] if c.strip().upper() == "ID"), None)
     namecol = next((c for c in rows[0] if "Metric Name" in c), None)
     valcol = next((c for c in rows[0] if "Metric Value" in c), None)
@@ -66,7 +68,7 @@ def load(path: pathlib.Path) -> dict[str, dict[str, float]]:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default="bench/results/ncu_conv1_90.csv")
+    ap.add_argument("--csv", default="bench/results/ncu_conv1_90_details.csv")
     args = ap.parse_args()
     path = pathlib.Path(args.csv)
     if not path.exists():
@@ -109,6 +111,21 @@ def main():
         ratio = pred / MEASURED_MS["B_smem"]
         print(f"\n  occupancy-only prediction: {MEASURED_MS['baseline']:.1f} x ({ob:.2f}/{oB:.2f})"
               f" = {pred:.1f} ms   vs measured {MEASURED_MS['B_smem']:.1f} ms   ratio {ratio:.2f}x")
+        # PRECONDITION, checked before the rule is applied. The rule as written says "a pure
+        # occupancy explanation predicts, *for a latency-bound kernel*, ...". If the baseline is
+        # bandwidth-bound instead, `t ~ 1/occupancy` is not merely inaccurate, its antecedent is
+        # false and the rule does not apply. Checked against DRAM utilisation so that the decision
+        # to set the rule aside is itself made by a measurement rather than by preference.
+        dram_b = d.get("baseline", {}).get(M_DRAM_BW)
+        if dram_b and dram_b / 4.0 > 0.5:      # metric arrives in Tbyte/s for the fast arms
+            print(f"\n  *** RULE PRECONDITION FAILS: baseline runs at {dram_b:.2f} TB/s, "
+                  f"{dram_b/4.0*100:.0f} % of HBM peak -- it is BANDWIDTH-bound, not latency-bound. "
+                  f"`t ~ 1/occupancy` has a false antecedent here, so its {ratio:.2f}x miss is a "
+                  f"property of my discriminator, not evidence about staging. ***")
+            verdicts["row2_rule_as_written"] = (
+                f"occupancy prediction {pred:.0f} ms vs {MEASURED_MS['B_smem']:.0f} measured "
+                f"({ratio:.2f}x, outside 1.5x) -> DIES")
+            verdicts["row2_precondition"] = "FAILED -- baseline is bandwidth-bound, rule inapplicable"
         if 1 / 1.5 <= ratio <= 1.5:
             verdicts["row2"] = ("CAPACITY-DRIVEN OCCUPANCY COLLAPSE -- the occupancy account "
                                 f"reproduces B's time to {ratio:.2f}x, inside the pre-registered "

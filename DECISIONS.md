@@ -1388,3 +1388,103 @@ a silent spill if anyone ever removes it.
 Registered as an out-of-sample check in the D55 sense: the layout rule was ratified on `conv1_90`
 and has now been emitted, guarded and validated on nine further T2 groups without a single
 correctness failure.
+
+## 2026-08-08 — D59: ncu adjudication. Four rows answered, and the fifth turns on a defect in my own discriminator.
+
+Nsight Compute 2025.2.0, three arms, one launch each, si_medium fp32. **[measurement]** throughout.
+
+| metric | baseline | A_transpose | B_smem |
+|---|---|---|---|
+| sectors/request (global ld) | **20.31** | **3.61** | 16.27 |
+| achieved occupancy | 96.90 % | 96.71 % | **6.17 %** |
+| occupancy limit — shared mem | 32 blocks | 32 blocks | **1 block** |
+| dynamic smem per block | 0 | 0 | 131.58 KB |
+| registers/thread | 32 | 32 | 32 |
+| stall long_scoreboard | **315.44** | **233.97** | 59.02 |
+| stall no_instruction | 57.83 | 68.73 | 0.03 |
+| stall barrier | **0.00** | 0.00 | **0.03** |
+| stall mio_throttle | 0.01 | 0.02 | 0.00 |
+| L2 hit rate | 57.40 % | 52.48 % | 73.44 % |
+| DRAM | **3.13 TB/s** | **3.19 TB/s** | 0.68 TB/s |
+| L2 | 6.27 TB/s | 5.90 TB/s | 1.52 TB/s |
+
+### Row 1 — the fan was real, at 20.3 sectors rather than 32, and it was never binding
+
+`20.31 -> 3.61` sectors per global load request; 4 is the fully-coalesced value at fp32. The
+access pattern D42 described **exists**. Its amplification was **20.3x, not 32x** — the metric
+averages over all global loads, including already-coalesced per-edge reads. D42 is upheld as a
+description and refuted as an account of the cost, which is what D53 concluded from timing alone.
+
+### Row 3 + Row 4 together — the finding that matters most
+
+**The kernel is DRAM-bandwidth-bound, at 78-80 % of HBM peak in both fast arms**, with
+`long_scoreboard` the dominant stall. And the 1.228x is *entirely* explained by bytes moved:
+
+    baseline     3.13 TB/s x 0.7148 s = 2.237 TB
+    A_transpose  3.19 TB/s x 0.5820 s = 1.857 TB
+    bytes ratio 1.205   vs   time ratio 1.228   -- agreement 1.9 %
+
+The transpose won by moving **17 % fewer bytes**, not by hiding latency. **This is the first cost
+model in this program that reproduces a measurement without being fitted to it**, and it passes
+D55(a) trivially since it is an identity against measured throughput rather than a floor.
+
+**Consequence, and it is a large one:** at 80 % of HBM peak there is almost no headroom left in
+this kernel for access-pattern work. The remaining lever is **moving fewer bytes** — fusion,
+recompute-vs-keep, blocking — not layout. The S1 hill on `conv1_90` is a *bandwidth wall*, not a
+layout defect.
+
+**Row 4 verdict: NOT CONFIRMED, and D53's mechanism is withdrawn.** L2 hit rate is **57.40 %**,
+not the >80 % that would confirm L2 residency. So D50/D53's stated reason for the traffic model's
+failure — "the weights are 1.25 MB in a 60 MiB L2, hence never DRAM traffic" — is **wrong**. The
+traffic model's *refutation* stands untouched (it predicted 5 611.8 ms against 714.8 measured),
+but the reason was the **second** error I listed and not the first: it counted *textual factor
+occurrences* rather than issued loads. Actual DRAM traffic is 2.24 TB against the model's implied
+22.4 TB — a 10x over-count, matching that error and not the other. **I was wrong about why I was
+wrong**, and row 4 existed to catch exactly that.
+
+*Hypothesis, unverified:* 57 % hit on 1.25 MB of weights that fit L2 many times over suggests the
+streaming per-edge data is evicting them. Actionable if true; **not** acted on here.
+
+### Row 5 — hypothesis #5 refuted
+
+`no_instruction` is 68.73 against `long_scoreboard`'s 233.97 on the winner. Not dominant. **The
+instruction-fetch hypothesis does not enter the emitter.** It explained the baseline, the winner
+and both models' failure, and the hardware says it is not the bottleneck — which is precisely why
+it was sent to the profiler instead of to the code.
+
+### Row 2 — the input-row staging decision, and why I am not making it alone
+
+The mechanism evidence is unambiguous and points **one** way:
+
+* `launch__occupancy_limit_shared_mem` = **1 block** against baseline's 32 — the collapse is
+  **capacity-driven**, by construction, not incidental.
+* achieved occupancy **96.90 % -> 6.17 %**.
+* **barrier stall 0.03, i.e. zero.** Double-touch moves *fewer* DRAM bytes, not more (1.266 TB vs
+  2.237 TB). **Both halves of the "barrier / double-touch" branch are measurably absent.**
+* B reaches only 17 % of HBM peak against baseline's 78 %: too few warps to keep enough requests
+  in flight to saturate the bandwidth the kernel is bound by.
+
+But my *quantitative discriminator* — `t_B = 714.819 x (occ_base/occ_B)`, revive iff within 1.5x —
+predicts **11 226 ms** against a measured 1 852.1 ms, a **6.06x miss**, which taken literally says
+DIES.
+
+**The discriminator is void by its own stated precondition.** I wrote it as *"a pure occupancy
+explanation predicts, **for a latency-bound kernel**, ..."* — that qualifier was in the
+pre-registration, before any counter existed. The measurement shows the baseline at **78 % of HBM
+peak**: it is **bandwidth-bound**, so `t ~ 1/occupancy` has a false antecedent and yields nothing
+here. Its 6.06x miss is a property of my model, not evidence about staging. The adjudicator checks
+this precondition against DRAM utilisation and prints the failure, so the decision to set the rule
+aside is itself made by a measurement rather than by preference.
+
+**Under the ruling as worded** — *revives iff B's loss attributes to capacity-driven occupancy
+collapse; dies iff barrier/double-touch* — the attribution is **capacity-driven occupancy
+collapse**, and **input-row staging REVIVES**.
+
+**Flagged for the reviewer rather than declared**, because a discriminator failing should not be
+adjudicated by the person who wrote it. If the 1.5x test is intended to bind regardless of its
+antecedent, the answer is DIES. I am not inventing a third option: I am reporting that my
+operationalisation was faulty and that the criterion it was meant to serve answers cleanly.
+
+**Caveat on any revival:** input rows are per-edge and far smaller than a 128.5 KiB weight, so the
+capacity arithmetic genuinely differs — but the kernel is at 80 % of HBM peak, so staging can only
+help if it *reduces bytes moved*. Nothing in this table suggests it would.
