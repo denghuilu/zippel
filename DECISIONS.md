@@ -2276,3 +2276,65 @@ now cost 56 min against 78 serial. The `cute.compile`-returns-an-in-process-call
 **Ledger honesty (directive 2iv), adopted:** compile **wall-clock** and **CPU-seconds** are
 separate columns from here. Parallelism improves the first and never the second. R9's account is
 kept in both, and the 1.6× ceiling is a statement about the first only.
+
+## 2026-08-08 — D85: plateau adjudicated. **Cell (b).** The bytes law was never violated — I fed it the wrong bytes.
+
+**[measurement]** `ncu`, `conv1_90`, si_medium fp32, one arm per GPU (0/1/2 — GPU 3 excluded per
+standing instruction).
+
+| `E_c` | registers | **my prediction** | occupancy | blocks/SM | DRAM total | demand/edge | **DRAM/edge** | achieved BW | ms |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | **32** | 17 | 96.72 % | 16 | 1 860 GB | 1.3194 MB | 7.1683 MB | 3.190 TB/s | 582.5 |
+| 2 | **32** | 82 | 95.38 % | 16 | 1 540 GB | 0.6641 MB | 5.9351 MB | 3.230 TB/s | 476.5 |
+| 4 | **32** | 116 | 94.34 % | 16 | 1 410 GB | 0.3364 MB | 5.4341 MB | 3.200 TB/s | 439.5 |
+
+### The bytes law reigns — on DRAM bytes, to ~1 %
+
+| `E_c` | DRAM-byte ratio | **time ratio** | apart |
+|---|---|---|---|
+| 2 | 1.208× | 1.222× | **1.2 %** |
+| 4 | 1.319× | 1.325× | **0.5 %** |
+
+`t = bytes / BW` holds, with **BW constant at 3.19–3.23 TB/s** (80 % of peak) across every arm.
+**The plateau was never a failure of the bytes law.** It was D82's units fault, exactly: demand
+bytes fell 3.92× while **DRAM bytes fell 1.32×**, and I divided the former into a law validated on
+the latter. The law predicted the measured times to 1 % the whole time.
+
+### Pre-registered cell (b) fires
+
+DRAM bytes do **not** track demand → **the demand→DRAM amplification governs**. And it is worse
+than D64's residual suggested, and *rising*:
+
+    E_c=1:  demand 1.3194 MB/edge -> DRAM 7.1683 MB/edge   =  5.43x amplification
+    E_c=4:  demand 0.3364 MB/edge -> DRAM 5.4341 MB/edge   = 16.2x amplification
+
+**DRAM traffic per edge barely falls when demand falls fourfold** — 7.17 → 5.43 MB/edge for a 4×
+demand cut. Consequently **the 3.6× residual becomes load-bearing and the parked probes unpark**
+(strided-read, partial-sector store; D71).
+
+*Mechanism, arithmetic only, not yet an attribution:* 132 SMs × 16 blocks = **2 112 concurrent
+CTAs**, each streaming the full 1.31 MB weight footprint — a **2.8 GB concurrent working set
+against a 60 MiB L2**. Edge batching cuts the *number* of CTAs but not the footprint each one
+streams, so it cannot reduce the thrash. That is why demand falls and DRAM does not, and it points
+at levers (b) L2-persistence and (c) CTA-scheduling — **which is exactly what those levers were**,
+now with a measured reason rather than a plausible one.
+
+### Two of my predictions refuted, both in the same direction
+
+**1. Occupancy was never the counter-pressure.** I predicted 37.5 % and 25 % at `E_c` = 2 and 4;
+measured **95.4 % and 94.3 %, 16 blocks/SM throughout**. The occupancy explanation for the plateau
+is dead. D72's BW(occupancy) curve **cannot be fitted from this sweep** — occupancy never moved, so
+there are no points. The out-of-sample check against `baseline`/`B_smem` is not runnable and is
+**not** quietly dropped: it needs a sweep that actually varies occupancy.
+
+**2. Registers stayed at 32 — my model was 3.6× too pessimistic.** Predicted 82 and 116 from
+`17·E_c + 48`; measured **32, unchanged**. The guard uses `inlined_live_upper_bound × E_c + chunk`,
+which D26 states is an *upper bound by construction* — and here it over-estimates by **5.75×**.
+ptxas rematerialises rather than holding what the source implies.
+
+**Consequence: the guard is refusing arms that would fit.** `E_c`=8 is refused at 184 predicted
+against a 168 budget, while the actual cost is ~32. **The pre-registered `E_c`=16 and `E_c`=32
+refusals are therefore probably wrong**, and the frontier is open further than D78/D79 assumed.
+The guard stays — an upper bound that refuses safely is doing its job — but the sweep's ceiling is
+now a *guard artefact*, not a hardware limit, and that distinction has to be printed rather than
+inherited.
