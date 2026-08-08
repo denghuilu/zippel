@@ -1731,3 +1731,44 @@ to pay for, so D22's argument does not reach it.
 Recorded now, with the distinction stated, because the failure mode is someone later citing D22 to
 block a step it never applied to — or, worse, citing its absence to wave one through. **The door
 is documented, not opened.**
+
+## 2026-08-08 — D68: counter semantics calibrated. `lts__t_sectors_op_*` carries a 1.50× multiplier; no write-allocate. The 5.4× shrinks to 3.6× and stays flagged.
+
+**[intervention]** 512 MiB buffer (8.5× L2), traffic known by construction.
+
+| kernel | metric | measured | × known |
+|---|---|---|---|
+| `sum` (read 512 MiB) | `dram__bytes_read.sum` | 537 MB | **1.000×** |
+| | `l1tex__t_sectors_pipe_lsu_mem_global_op_ld.sum` | 16 777 344 sec = 536.9 MB | **1.000×** |
+| | `lts__t_sectors_op_read.sum` | 25 184 778 sec = 805.9 MB | **1.501×** |
+| `fill_` (write 512 MiB) | `lts__t_sectors_op_write.sum` | 25 151 914 sec | **1.499×** |
+| | `dram__bytes_write.sum` | 511 MB | 0.952× |
+| | `dram__bytes_read.sum` | 454 B | **≈0 — no write-allocate** |
+
+**Two clean results.** `dram__bytes_*` and `l1tex__t_sectors_*` are **exact**. `lts__t_sectors_op_*`
+reads **1.50×** the bytes actually moved, consistently on both the read and write side — so any
+figure taken from it must be divided by 1.5 before use. And a pure write generates essentially
+**no DRAM reads**, so write-allocate is not a contributor here and cannot be invoked to explain
+`conv1_90`'s excess.
+
+**Applied to D64's flag.** `conv1_90`'s `lts__t_sectors_op_read` of 93.37e9 sectors is 2.99 TB
+raw, **1.99 TB corrected**. Global-load L1 misses account for 555 GB. **The discrepancy falls from
+5.4× to 3.6× and does not vanish.** It stays flagged, and levers (b) and (c) stay held: a
+persistence or scheduling change is *evaluated* in exactly this quantity, and 3.6× of it is still
+unattributed.
+
+*Candidate, unquantified and not asserted:* instruction fetch. The kernel is ~10 246 straight-line
+instructions per thread and its SASS is large; instruction traffic goes through L2 and is not a
+global load, so it would appear in `lts__t_sectors_op_read` and not in
+`l1tex__..._mem_global_op_ld`. A back-of-envelope 246 KB of SASS re-fetched once per CTA is 64 GB,
+an order short of the 1.4 TB residual, so **this candidate does not currently close the gap** and
+is recorded as a lead rather than an answer. Note it is *not* in tension with row 5's refutation:
+`no_instruction` measured 57.8–68.7 and was not the dominant **stall**, which is a different
+question from whether instruction **traffic** is large.
+
+**A defect in my own calibration script, caught by the data rather than by review.** It declared
+"launch order: 0=read_only 1=read_write 2=write_only" and only **two** kernels were profiled:
+`y.copy_(x)` between two same-device same-dtype tensors is a **DtoD memcpy, not a kernel**, so it
+never appeared. Launch 1 is `fill_`, identifiable because it shows zero reads. The read-write cell
+of the table is therefore **not measured**; the two cells that answer the question are. Stated
+rather than quietly re-labelled, and the script's docstring is wrong until it is fixed.

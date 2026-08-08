@@ -9,7 +9,8 @@ levers (b) L2-persistence and (c) CTA-scheduling are held behind this experiment
 Timeboxed and deliberately minimal. Three torch kernels whose traffic is known by construction:
 
   read_only    `x.sum()`          reads N bytes, writes 4
-  read_write   `y.copy_(x)`       reads N, writes N
+  read_write   `y.copy_(x)`       reads N, writes N  -- NOT MEASURED: this is a DtoD memcpy,
+                                    not a kernel, so ncu never sees it (D68)
   write_only   `y.fill_(1.0)`     reads 0, writes N   (isolates write-allocate)
 
 For each, the ratio `measured_sectors x 32 B / known_bytes` is the metric's multiplier. The
