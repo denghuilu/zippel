@@ -1430,6 +1430,16 @@ the gain is ≈1.50×. The defensible claim is "a gain of the same order as si_m
 was 4.50× that; it is now **3.12×**. **Thirty-one percent of the gap closed by one layout rule, at
 zero runtime cost and bit-exactly** — and §8.5i says the remaining gap is bytes, not layout.
 
+**What S1's endgame actually is, stated plainly because a reviewer will ask.** The remaining
+work on these kernels — edge-batched CTAs, weight-tile staging, possibly an MMA step — is
+**standard blocking**. Its goal is to reach *eager's per-kernel efficiency*, not to beat it, and
+nothing in this program's claim ever rested on per-operator novelty. **The bet is whole-graph
+three-pass fusion and verification, evaluated on kernels that are competitive rather than
+exceptional.** A fused stack that matches cuBLAS-class per-kernel efficiency and then wins on
+fusion, store elision and peak memory is exactly the claim; a fused stack that needs to *beat*
+hand-tuned per-operator kernels to break even would be a different and much weaker one. The
+per-kernel work is a prerequisite being paid down, and §8.5i–8.5j report how much of it remains.
+
 **Still NOT MET.** The S1 wall-clock criterion compares fused against eager *forward*, and 0.051×
 is not 1.0×. What has changed is the shape of the remaining deficit: it is now a measured
 bandwidth problem with a 508× compulsory-traffic headroom, rather than an unattributed one.
