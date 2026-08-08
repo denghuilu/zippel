@@ -1994,3 +1994,45 @@ different limit than the one pre-registered. Plan: measure compile time at `E_c`
 and run what is feasible — printing any un-run arm as **"not run: projected compile time"** with
 the projection, exactly as `E_c`=32's register refusal is printed as a data row. An arm omitted
 without a stated reason is the silent truncation D-numbers ago forbade.
+
+## 2026-08-08 — D77: who unrolls the edge loop. Probe pre-registered before `terms ∝ E_c` becomes law.
+
+**"Load-bearing facts keep paying" enters the ledger**, with D46's disjoint-slice fact as the case:
+it killed the original staging arm (D46/D60), killed the capacity-safe variant *pre-fire* (D64),
+and removed the smem half of lever (a) (D76). One measured ownership fact, three design decisions,
+no re-measurement.
+
+### The routes, and what separates them
+
+The DSL offers `range_constexpr`, `range_dynamic`, `range` and `LoopUnroll`. That gives three
+places the edge loop can be expanded, and they pay **different halves of the compile cost**:
+
+| route | source text | traced IR | who expands | pays |
+|---|---|---|---|---|
+| **A — emitter-text unroll** | `5 123 × E_c` terms | large | my emitter | Python parse **+** trace **+** backend |
+| **B — `range_constexpr`** | `5 123` terms | large | the DSL tracer | trace **+** backend |
+| **C — `range` + `LoopUnroll`** | `5 123` terms | small | the backend | backend only |
+
+That decomposition is the point: compile time is not one quantity. A tells us nothing about
+whether the *backend* can hold `E_c` accumulator sets; B and A produce the same IR and differ only
+in Python-side cost; **C is the only route that could dissolve the ceiling**, because a real
+constant-trip loop with the weight load inside is the one case where the backend could hoist the
+loop-invariant load itself and keep one accumulator set live.
+
+**Probe: `E_c` = 4, all routes that compile, bit-equality against `E_c`=1 required of each.**
+Measured per route: **compile time (split into trace and backend where separable), registers per
+thread, achieved occupancy, runtime.**
+
+### Pre-registered outcomes
+
+* **backend holds registers** (C compiles, no spill, reuse realised) → **the `terms ∝ E_c` ceiling
+  dissolves**, the sweep extends to `E_c` = 16 and beyond, and R9 (compile cost as the scaling
+  limit, REPORT 8.5d) gets structural relief rather than a workaround. This is the outcome that
+  changes the program, not just the sweep.
+* **backend spills** (C spills, or fails to hoist and so captures no reuse) → **route A stands**,
+  `terms ∝ E_c` is law, and un-run arms are printed as *"not run: projected compile time"* with
+  their projections, alongside `E_c`=32's register refusal. Both are data rows.
+
+A third possibility is named so it is not discovered as a surprise: **B beats A on compile time
+while producing identical IR.** That would be a pure win on Python-side cost and no information
+about registers — worth taking, worth not mistaking for the first outcome.
