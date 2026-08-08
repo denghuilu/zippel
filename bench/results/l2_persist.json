@@ -1,0 +1,24 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "pool_bytes": 1310720,
+  "carveout_mib": 32,
+  "arms": {
+    "persist_off": {
+      "status": "ok",
+      "ms": 582.7551879882812,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.029430675624624193
+    },
+    "persist_on": {
+      "status": "ok",
+      "ms": 1237.0634765625,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.03377730307329053
+    }
+  }
+}

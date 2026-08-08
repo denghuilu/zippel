@@ -2372,3 +2372,38 @@ one. D84 leaves route C **alive and promoted to the primary compile lever**. Fil
 * **Composition waits for Track 1** and ships once at N=5. Banking a number we know we would
   re-measure is process theatre.
 * **Lever (b) unparked** as Track 1, single-variable at `E_c`=1.
+
+## 2026-08-08 — D87: L2 persistence made it 2.12× SLOWER — and my experiment cannot say why.
+
+**[measurement]** `conv1_90`, si_medium fp32, `E_c`=1, NUMA-pinned, GPU 0.
+
+    persist_off   582.755 ms
+    persist_on   1237.063 ms      0.4711x  -- bit-equal, spread 0.03 %
+
+Correct and stable, so the number is real. **The pre-registered "hypothesis false → retire the
+eviction story" branch is NOT fired**, because the experiment has a design flaw of mine that would
+produce exactly this signature as a false negative.
+
+**The flaw.** I reserved a **33.75 MiB carve-out for a 1.31 MB region** — 24× oversized — out of a
+60 MiB L2. That leaves ~26 MiB for everything else, including the per-edge streaming data which
+D64 showed carries most of the traffic. So two causes are consistent with the result and one arm
+cannot separate them:
+
+1. persistence genuinely fails to help the weights, **or**
+2. **my carve-out starved the streaming data**, and the weights were never the issue being tested.
+
+Sizing the carve-out to the *capacity* rather than to the *region* was the error. The capacity
+figure (37.5 MiB) told me what was permitted; it said nothing about what was wise, and I used it as
+if it did.
+
+**Disambiguation, running:** `0:0` baseline · **`32:0` carve-out with no window** — the control that
+isolates carve-out cost from window effect · `2:1`, `4:1`, `8:1`, `32:1`. If `32:0` alone is slow,
+the carve-out is the culprit and the small-window arms carry the verdict. If `32:0` is fast and
+`32:1` slow, persistence itself is the cost and the eviction story is genuinely in trouble.
+
+**The generalisable form**, since this is the second experiment of mine to carry an avoidable
+confound (the first being the demand-vs-DRAM units fault): **a control that isolates the
+intervention's *overhead* from its *effect* is not optional when the intervention reserves a shared
+resource.** Reserving capacity is never free, so any measurement of "did pinning help?" must be
+paired with "what did reserving cost?" — and I should have built that pair from the start rather
+than after a surprising number.

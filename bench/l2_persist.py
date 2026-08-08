@@ -95,6 +95,11 @@ def main():
     ap.add_argument("--fixture", default="si_medium")
     ap.add_argument("--dtype", default="f32")
     ap.add_argument("--carveout-mib", type=int, default=32)
+    ap.add_argument("--configs", default="",
+                    help="semicolon list of <carveout_mib>:<window 0|1>; overrides the two-arm "
+                         "default. The control that matters is carve-out WITHOUT a window: it "
+                         "separates 'persistence did not help' from 'my carve-out starved the "
+                         "streaming data', which a single oversized arm cannot.")
     ap.add_argument("--warmup", type=int, default=5)
     ap.add_argument("--iters", type=int, default=30)
     ap.add_argument("--out", default="bench/results/l2_persist.json")
@@ -207,14 +212,21 @@ def main():
         return rt.cudaStreamSetAttribute(ctypes.c_void_p(raw), STREAM_ATTR_ACCESS_POLICY,
                                          ctypes.byref(val))
 
+    if args.configs:
+        plan = []
+        for spec_s in args.configs.split(";"):
+            co, w = spec_s.split(":")
+            plan.append((f"co{co}MiB_win{w}", int(co), w == "1"))
+    else:
+        plan = [("persist_off", 0, False), ("persist_on", args.carveout_mib, True)]
+
     results, base_out = {}, None
-    for name, on in (("persist_off", False), ("persist_on", True)):
-        if on:
-            rc = rt.cudaDeviceSetLimit(LIMIT_PERSISTING_L2,
-                                       ctypes.c_size_t(args.carveout_mib * 1024 * 1024))
-            got = ctypes.c_size_t(0)
-            rt.cudaDeviceGetLimit(ctypes.byref(got), LIMIT_PERSISTING_L2)
-            print(f"\ncarve-out: setLimit rc={rc}, reserved {got.value/2**20:.2f} MiB", flush=True)
+    for name, co_mib, on in plan:
+        rc = rt.cudaDeviceSetLimit(LIMIT_PERSISTING_L2, ctypes.c_size_t(co_mib * 1024 * 1024))
+        got = ctypes.c_size_t(0)
+        rt.cudaDeviceGetLimit(ctypes.byref(got), LIMIT_PERSISTING_L2)
+        print(f"\n[{name}] carve-out setLimit({co_mib} MiB) rc={rc}, reserved "
+              f"{got.value/2**20:.2f} MiB; window={'on' if on else 'off'}", flush=True)
         rc = set_window(on)
         if rc != 0:
             print(f"{name}: cudaStreamSetAttribute rc={rc} -- NOT APPLIED, reporting as blocked",
