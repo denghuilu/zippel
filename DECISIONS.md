@@ -1488,3 +1488,54 @@ operationalisation was faulty and that the criterion it was meant to serve answe
 **Caveat on any revival:** input rows are per-edge and far smaller than a 128.5 KiB weight, so the
 capacity arithmetic genuinely differs — but the kernel is at 80 % of HBM peak, so staging can only
 help if it *reduces bytes moved*. Nothing in this table suggests it would.
+
+## 2026-08-08 — D60: rulings on the ncu adjudication. The regime finding supersedes the revival ruling.
+
+* **The discriminator is VOID, not DIES.** False antecedent, printed by its own precondition check
+  before the verdict. The attribution stands: **capacity-driven occupancy collapse**, with every
+  rival branch measurably absent (barrier 0.03, double-touch moving *fewer* bytes).
+* **The regime finding supersedes the old revival ruling.** `conv1_90` is DRAM-bandwidth-bound at
+  78 % of peak and its 1.228x is exactly its 17 % byte cut (1.9 % agreement; the reviewer's
+  out-of-sample check on `B_smem` closes to **0.5 %**). So from here **every intervention on this
+  kernel passes or fails one test: does it cut DRAM bytes?**
+* **Input-row staging: DEAD, and now for a reason that needs no measurement.** Input rows are
+  per-edge and read **once** — they are already compulsory-once traffic. Staging cannot cut bytes
+  that are only moved once. It fails *ex ante*, which is a better death than the one the void
+  discriminator was going to give it.
+* **New arm: capacity-safe weight-tile staging.** k-tiled to **≤ 48 KiB** so no dynamic-smem
+  opt-in and no occupancy loss, targeting the **43 % byte reduction `B_smem` proved removable**
+  (1.266 TB vs 2.237 TB) without the 1-block-per-SM penalty that made B unusable. **Fires only
+  after source attribution**, and is to be stated as an interval with assumptions, never a point
+  estimate.
+
+### The compulsory-vs-measured decomposition. **[static, deliberately safe]**
+
+Compulsory = what a correct implementation with an infinite cache could not avoid: every distinct
+operand byte read once, every output byte written once, weights counted **once per launch** rather
+than once per CTA. Every rounding favours the compulsory column, so each ratio is a **lower bound
+on the waste**.
+
+| kernel | compulsory | DRAM | ratio | provenance |
+|---|---|---|---|---|
+| `conv1_90` | 3.46 GB | 2.24 TB | **647×** | measured (ncu) |
+| `conv2_95` | 2.79 GB | 1.08 TB | **387×** | assumed 3.13 TB/s |
+| `conv1_m0_86` | 1.46 GB | 0.60 TB | **407×** | assumed 3.13 TB/s |
+| **total** | **7.71 GB** | **3.91 TB** | **508×** | |
+
+The reviewer's figure was ~390×; mine lands at **387–647× per kernel, 508× aggregate**. The spread
+is entirely in what counts as compulsory, and the headline is unchanged by it: **the top-3 kernels
+move two to three orders of magnitude more DRAM traffic than the problem requires.** That belongs
+next to "bandwidth-bound at 78 % of peak" in REPORT, because on its own the latter reads as
+"nothing left to win" and it means the opposite.
+
+`conv1_90`'s compulsory is dominated by per-edge buffers (`conv1_90` 1 140 MiB, `conv1_mod1_88`
+1 014, `conv1_m0_86` 633, `conv1_mod2_89` 507 MiB); the four weights are **1.25 MiB**.
+
+**A consistency check that makes the anomaly concrete.** 2.24 TB over 259 474 CTAs is **8.63 MB
+per edge**, against 13.3 KB of compulsory per-edge traffic. Re-reading *every* weight *every* CTA
+would be 1.31 MB — only 15 % of what is moved. So the traffic is **not** explained by weight
+re-reads alone. The chain that does fit: ~10 246 loads/thread x 128 threads / 32 = ~41 k warp
+requests per CTA, x 20.31 sectors x 32 B = **26.6 MB of L1->L2 traffic per CTA** (measured L2:
+6.27 TB/s x 0.7148 s = 4.48 TB, same order), of which the 57.4 % L2 hit rate leaves ~1.9 TB to
+DRAM against 2.24 measured. **[static, consistent with measurement — not an attribution.]**
+The source-attributed run exists to turn this into one.

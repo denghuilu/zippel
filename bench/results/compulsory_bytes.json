@@ -1,0 +1,145 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "edges": 259474,
+  "kernels": [
+    {
+      "kernel": "conv1_90",
+      "ms": 714.819,
+      "compulsory_bytes": 3455428612,
+      "measured_dram_bytes": 2237383469999.9995,
+      "ratio": 647.4981026174357,
+      "provenance": "[measured]",
+      "operands": [
+        {
+          "buf": "c1_w1a",
+          "segment": "none",
+          "bytes": 524288
+        },
+        {
+          "buf": "c1_w1b",
+          "segment": "none",
+          "bytes": 524288
+        },
+        {
+          "buf": "c1_w2a",
+          "segment": "none",
+          "bytes": 131072
+        },
+        {
+          "buf": "c1_w2b",
+          "segment": "none",
+          "bytes": 131072
+        },
+        {
+          "buf": "conv1_90",
+          "segment": "edge",
+          "bytes": 1195656192
+        },
+        {
+          "buf": "conv1_m0_86",
+          "segment": "edge",
+          "bytes": 664253440
+        },
+        {
+          "buf": "conv1_mod1_88",
+          "segment": "edge",
+          "bytes": 1062805504
+        },
+        {
+          "buf": "conv1_mod2_89",
+          "segment": "edge",
+          "bytes": 531402752
+        },
+        {
+          "buf": "unit_m",
+          "segment": "none",
+          "bytes": 4
+        }
+      ]
+    },
+    {
+      "kernel": "conv2_95",
+      "ms": 344.7,
+      "compulsory_bytes": 2790519812,
+      "measured_dram_bytes": 1078911000000.0,
+      "ratio": 386.6344167708063,
+      "provenance": "[assumed 3.13 TB/s]",
+      "operands": [
+        {
+          "buf": "c2_w1a",
+          "segment": "none",
+          "bytes": 262144
+        },
+        {
+          "buf": "c2_w1b",
+          "segment": "none",
+          "bytes": 262144
+        },
+        {
+          "buf": "c2_w2a",
+          "segment": "none",
+          "bytes": 65536
+        },
+        {
+          "buf": "c2_w2b",
+          "segment": "none",
+          "bytes": 65536
+        },
+        {
+          "buf": "conv2_95",
+          "segment": "edge",
+          "bytes": 1195656192
+        },
+        {
+          "buf": "conv2_m0_94",
+          "segment": "edge",
+          "bytes": 398552064
+        },
+        {
+          "buf": "gate_93",
+          "segment": "edge",
+          "bytes": 1195656192
+        },
+        {
+          "buf": "unit_m",
+          "segment": "none",
+          "bytes": 4
+        }
+      ]
+    },
+    {
+      "kernel": "conv1_m0_86",
+      "ms": 190.5,
+      "compulsory_bytes": 1463326208,
+      "measured_dram_bytes": 596265000000.0,
+      "ratio": 407.4723713278837,
+      "provenance": "[assumed 3.13 TB/s]",
+      "operands": [
+        {
+          "buf": "c1_b0",
+          "segment": "none",
+          "bytes": 2560
+        },
+        {
+          "buf": "c1_w0",
+          "segment": "none",
+          "bytes": 1966080
+        },
+        {
+          "buf": "conv1_m0_86",
+          "segment": "edge",
+          "bytes": 664253440
+        },
+        {
+          "buf": "conv1_mod0_85",
+          "segment": "edge",
+          "bytes": 797104128
+        }
+      ]
+    }
+  ],
+  "total_compulsory": 7709274632,
+  "total_measured": 3912559469999.9995,
+  "total_ratio": 507.513307900535
+}
