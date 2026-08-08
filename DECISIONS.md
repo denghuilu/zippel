@@ -2102,3 +2102,31 @@ than after**. The refusal rows printed in the results table will therefore be `E
 mis-vehicle — died at emission-structure derivation, **zero GPU minutes spent**. The
 error-mortality curve keeps shifting left: from post-measurement retraction (D42, D53), to
 pre-fire (D64), to pre-implementation (D76), to pre-emission (D78).
+
+## 2026-08-08 — D80: the A≈B collapse, pre-registered; and a coverage census for the composition.
+
+**Collapse prediction, before the probe runs.** D77 framed A-vs-B as a Python-side cost contrast:
+A emits `5 123 × E_c` terms of source text, B emits `5 123`. The measured statement counts say
+otherwise — **141 → 5 392 → 5 644 for `E_c` = 1 → 2 → 4** — because the chunk-interleaved structure
+makes statement count nearly flat in `E_c`, dominated by the `chunk` weight temporaries rather
+than the edge count. Python parse cost tracks *statements*, not terms.
+
+So **A ≈ B is predicted**: parse is flat by the statement structure, and trace is equal by D77's own
+table (A and B produce identical IR). **The probe's live contrast is therefore `{A, B}` vs `C`** —
+the routes that hold `E_c` accumulator sets versus the one that asks the backend to. **A null
+A-vs-B difference reads as confirmation of this prediction, not as a surprise**, and it is recorded
+now so it cannot be reported as either.
+
+This also corrects D77's implicit premise that A's extra cost was Python-side and therefore large.
+It was neither.
+
+**Coverage census at composition time.** When the composition re-measures with batching enabled,
+the results table prints **which groups ran batched and which fell back, with the reason** —
+today the only reason is a channel-ranged assignment, which edge batching refuses rather than
+emitting an unguarded if/elif chain per edge. Partial coverage must be **visible in the table and
+never inferred from a smaller-than-expected delta**: a 10-group rule that reaches 6 groups and a
+6-group rule that reaches all of them produce the same aggregate number and are different facts.
+This is the same discipline as printing register refusals and compile-time projections as rows.
+
+**Ratified as designed:** tail handling by index clamp with store-only guard, and the
+channel-ranged refusal.
