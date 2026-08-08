@@ -1,0 +1,57 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "chunk": 48,
+  "group": 43,
+  "budget": 168,
+  "arms": {
+    "E1": {
+      "status": "ok",
+      "E_c": 1,
+      "chunk": 48,
+      "ms": 582.5283813476562,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal_to_E1": true,
+      "max_diff_vs_E1": 0.0,
+      "emit_s": 0.01509873999748379,
+      "parse_s": 0.05320177099201828,
+      "compile_s": 285.99793008202687,
+      "statements": 141,
+      "predicted_registers": 57,
+      "spread_pct": 0.030510852465045323
+    },
+    "E2": {
+      "status": "ok",
+      "E_c": 2,
+      "chunk": 48,
+      "ms": 476.5232849121094,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal_to_E1": true,
+      "max_diff_vs_E1": 0.0,
+      "emit_s": 0.02996366302249953,
+      "parse_s": 0.10048183496110141,
+      "compile_s": 1046.8524038069881,
+      "statements": 5392,
+      "predicted_registers": 66,
+      "spread_pct": 0.045194548859841505
+    },
+    "E4": {
+      "status": "ok",
+      "E_c": 4,
+      "chunk": 48,
+      "ms": 439.48040771484375,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal_to_E1": true,
+      "max_diff_vs_E1": 0.0,
+      "emit_s": 0.04170993500156328,
+      "parse_s": 0.18201207800302655,
+      "compile_s": 3354.8996222750284,
+      "statements": 5644,
+      "predicted_registers": 84,
+      "spread_pct": 0.046941530157780485
+    }
+  }
+}

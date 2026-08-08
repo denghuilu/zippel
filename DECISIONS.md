@@ -2130,3 +2130,58 @@ This is the same discipline as printing register refusals and compile-time proje
 
 **Ratified as designed:** tail handling by index clamp with store-only guard, and the
 channel-ranged refusal.
+
+## 2026-08-08 — D81: edge-batch probe. **Plateau cell fires.** The MMA door's condition is met by a bound, not an estimate.
+
+**[intervention]** `conv1_90`, si_medium fp32, `CHUNK`=48. **Every arm bit-equal to `E_c`=1** — not
+within a bound, bit-equal — so the losses and the gains are both real.
+
+| `E_c` | ms | speedup | bytes/edge | byte-predicted | **realised** | compile | µs/edge |
+|---|---|---|---|---|---|---|---|
+| 1 | 582.528 | 1.000× | 1.3194 MB | 1.000× | — | 286.0 s | 2.245 |
+| 2 | 476.523 | **1.222×** | 0.6641 MB | 1.987× | **61.5 %** | 1 046.9 s | 1.836 |
+| 4 | 439.480 | **1.325×** | 0.3364 MB | 3.922× | **33.8 %** | 3 354.9 s | 1.694 |
+
+`E_c`=1 reproduces `A_transpose` (582.528 vs 582.023, 0.09 %).
+
+**The pre-registered `plateau` cell fires, unambiguously.** Predicted interval for `E_c`=4 was
+150–250 ms; measured **439.5**. Bytes fell 3.92× and time fell 1.33× — **33.8 % of the byte
+prediction realised, down from 61.5 % at `E_c`=2**. `E_c`=2→4 halves bytes again and buys 1.084×.
+The bytes law, which held to 1.9 % across the transpose arms (D59) and 0.5 % out-of-sample, **does
+not govern this transformation**: something else binds, and it binds harder as `E_c` rises.
+
+Per the pre-registration: *identify the second bottleneck before extending the sweep.* Not
+extending. The candidate is occupancy — predicted registers `17·E_c + 48` give 82 and 116, i.e.
+~6 and ~4 blocks/SM against `E_c`=1's 16 — but **registers and occupancy come from `ncu` and the
+hoist from disassembly (D78)**, and none of it is claimed from these timings.
+
+### The MMA door (D67): its condition is satisfied, and by a bound rather than an estimate
+
+The door opens *only if* the scalar edge-batch plateaus **above eager's per-kernel µs/edge**. At
+the plateau this **one kernel** costs **1.694 µs/edge**, while eager's **entire forward** costs
+**0.192 µs/edge**. Eager's SO(2)-conv share is necessarily *less* than its total, so the plateau
+sits at **≥ 8.82×** eager's per-kernel figure without needing eager's breakdown at all. The
+inequality does the work an estimate would have done worse.
+
+**Condition met. The door is open — not walked through**, and D67's wording holds: it enters only
+as the next step, not alongside lever (a).
+
+### Compile cost is now a first-class result, not an overhead
+
+    286.0 s → 1 046.9 s → 3 354.9 s     for 1× → 2× → 4× arithmetic
+    exponent 1.87 then 1.68 — superlinear, consistent with ptxas register allocation
+
+**56 minutes to compile one kernel at `E_c`=4.** Projected `E_c`=8 ≈ 3 hours — and it is
+register-refused at `CHUNK`=48 anyway (17×8+48 = 184 > 168). With 24 T2 groups in the forward,
+batching them all is not a compile budget anyone would spend. **This is R9 (compile cost as the
+scaling limit) arriving as a hard constraint rather than a note**, and it argues that the fully
+unrolled emission model has met its limit — which is exactly what route C was pre-registered to
+test, and now matters more than when it was written.
+
+### A consequence for D47, flagged before it is measured
+
+If `conv2_95` and `conv1_m0_86` respond like `conv1_90` (~1.33×), the forward would fall from
+972.8 ms to roughly **700 ms**, i.e. **≈ 2.2× eager's 311.63 ms training step** — **inside the 3×
+margin**. D47 would then fire by its own text and the composition re-measure becomes **N=5**.
+Recorded now, before the composition runs, so the trigger is not evaluated by someone who already
+knows the number.
