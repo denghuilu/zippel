@@ -120,6 +120,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fixture", default="si_medium")
     ap.add_argument("--dtype", default="f32")
+    ap.add_argument("--arms", default="baseline,A_transpose,B_smem",
+                    help="comma-separated subset; the source-attributed run needs only the two "
+                         "fast arms, and B_smem's 1.85 s x replay is pure cost there")
     args = ap.parse_args()
 
     import cutlass
@@ -180,6 +183,12 @@ def main():
 
     stream = cutlass.cuda.default_stream()
     arms = {"baseline": ({}, ()), "A_transpose": (transpose, ()), "B_smem": ({}, stage)}
+    want = [a.strip() for a in args.arms.split(",") if a.strip()]
+    unknown = set(want) - set(arms)
+    if unknown:
+        raise SystemExit(f"unknown arms {sorted(unknown)}; have {sorted(arms)}")
+    arms = {k: v for k, v in arms.items() if k in want}
+    print(f"arms this run: {', '.join(arms)}", flush=True)
 
     # Everything -- compilation, allocation, permutation -- happens before the profiler starts, so
     # ncu sees exactly three kernels and no torch setup work.
