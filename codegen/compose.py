@@ -188,6 +188,22 @@ def transpose_inputs(cp: CompiledProgram, env: dict[str, torch.Tensor]) -> dict[
                     f"{perm} by {g.name}. One tensor cannot satisfy both; the operand would need "
                     f"a per-kernel copy, which is a real cost and a decision, not a default.")
             want[b] = (perm, g.name)
+    # A buffer permuted here is permuted for EVERY reader, because there is one tensor per buffer.
+    # The conflict check above only catches two kernels wanting *different* layouts; it does not
+    # catch a kernel that wants none. That reader would silently consume a permuted tensor under
+    # its original index order -- not a crash, since the extents may still bound the coordinates,
+    # but a wrong answer in a composed program whose per-group tests all pass individually. Which
+    # is exactly the failure mode this module exists to prevent (see its header).
+    for g in cp.groups:
+        for b in g.order:
+            if b in want and b not in (g.transpose or {}):
+                raise ValueError(
+                    f"{want[b][1]} needs buffer {b!r} permuted to {want[b][0]}, but {g.name} also "
+                    f"reads {b!r} and was emitted against its original layout. One tensor cannot "
+                    f"serve both; either {g.name} adopts the same layout requirement, or {b!r} "
+                    f"needs a second copy. Silently permuting it would make {g.name} read "
+                    f"correctly-shaped garbage.")
+
     for b, (perm, gname) in want.items():
         if b not in cp.prog.inputs:
             raise ValueError(
