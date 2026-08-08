@@ -1900,3 +1900,45 @@ around it. A consolidation passes only if **all four** hold:
 
 The pre-refactor suite is being run now to establish (2) and (3) as **green before**, not merely
 assumed green. A gate that compares against an unverified baseline proves nothing.
+
+## 2026-08-08 — D74: D70a substrate extraction. **Gate PASSED on all four conditions.**
+
+`codegen/emit_common.py` now holds what the three templates shared; T1/T2/T3 call into it.
+
+| condition | baseline | result |
+|---|---|---|
+| 1 · zero behaviour change | 206 emitted sources | **PASS — all 206 byte-identical modulo the `EMITTER_SHA` line** |
+| 2 · suite green, count unchanged | 122 passed | **PASS — 122 passed, 0 failed, `PYTEST_EXIT=0`** |
+| 3 · every planted fault re-fires | 7 faults / 8 cases | **PASS — all green in `test_planted_faults.py`** |
+| 4 · SHA rolls exactly once | `f61e41b96ba1ddf5`, 6 files | **PASS — `95ed6f4ecb6ca545`, 7 files, stable over three reads** |
+
+**What was actually absorbed.** Three byte-identical copies of `_chunked_sum` and `CHUNK = 48`
+collapse to one. `_sym` and `_ref` collapse to one each, with the two genuinely per-template
+decisions as hooks: **how an index component is rendered** (`render`) and **how the leading
+segment coordinate is formed** (`lead`). Metadata assembly collapses to one function.
+
+**The metadata hook needed three slots, not one** — `notes` (all three), `after_segment` (T3's
+`DRIVING_SEGMENT`) and `after_sha` (T2's `TRANSPOSE`/`STAGED`) — because the templates genuinely
+interleave their fields differently. So the shared thing is the **field set, order and
+formatting**, while each template keeps its own prose. Unifying the prose as well would have
+changed emitted text for no gain and forfeited the byte-identity that made condition 1 an equality
+check rather than a judgement call.
+
+**`EMITTER_SHA`'s list grew to 7 by the predicate, never by a count**: hash everything that
+determines emitted output. `emit_common.py` determines it, so omitting it would have reopened
+exactly the stale-artefact hole the SHA exists to close. What shrank is duplicated *content*.
+
+### The check that nearly filed a false failure, recorded because it is the fourth of its kind
+
+Condition 1's first run reported **204 of 206 differing** and I came close to reading it as a
+refactor failure. The cause: **`EMITTER_SHA` is embedded inside every generated source**, so when
+the SHA rolls — condition 4, and expected — every source hash changes *by construction*. The check
+as written could not have passed for **any** emitter change, including a pure comment edit. A
+broken instrument returning a real-looking number, which is now the fourth instance in this
+ledger: the traffic model (D53), the 651 ms figure (D42), the DCGM-vs-`ncu` blocker (D57), this.
+
+Fixed by normalising the SHA line out and regenerating the before-state with `git stash`, so the
+comparison reruns the *old emitter* rather than trusting old hashes — before-vs-after rather than
+before-hash-vs-after-source. **The generalisable rule: when a check compares artefacts that embed
+a fingerprint of the thing being checked, the fingerprint must be normalised out or the check is
+testing itself.**

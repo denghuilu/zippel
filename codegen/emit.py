@@ -32,7 +32,8 @@ from codegen.schedule import Schedule, all_indices
 #: hash of these, not a repo git SHA: a git SHA misses uncommitted edits, and during S1 the T3
 #: emitter changed underneath an already-measured composition. Every kernel must trace to its
 #: generator's exact content.
-_EMITTER_SOURCES = ("emit.py", "emit_tile.py", "emit_reduce.py", "schedule.py", "tile.py",
+_EMITTER_SOURCES = ("emit_common.py", "emit.py", "emit_tile.py", "emit_reduce.py",
+                    "schedule.py", "tile.py",
                     "bounds.py")
 
 
@@ -51,13 +52,14 @@ def emitter_sha() -> str:
 
 #: Registers per thread we are willing to ask for. Above this the schedule spills to local
 #: memory and the whole point of fusing the group is lost, so refuse and report instead.
-REGISTER_BUDGET = 168
 
-DTYPE = {"f64": "Float64", "f32": "Float32"}
+#: Re-exported from the substrate so existing importers keep working (D70a).
+from codegen.emit_common import (CHUNK, DTYPE, REGISTER_BUDGET, chunked_sum,  # noqa: E402,F401
+                                metadata_block, ref, sym)
 
 
 def _sym(buf: str, idx: tuple[int, ...]) -> str:
-    return f"v_{buf}" + ("".join(f"_{i}" for i in idx) if idx else "")
+    return sym(buf, idx)
 
 
 def _ref(prog: Program, buf: str, idx: tuple[int, ...], seg: str) -> str:
@@ -68,9 +70,7 @@ def _ref(prog: Program, buf: str, idx: tuple[int, ...], seg: str) -> str:
     (`zippel/interp.py:segment_length`). So a static [9,9] operand is `m_jd[0, i, j]`, and the
     two conventions cannot drift apart silently.
     """
-    t = prog.type_of(buf)
-    lead = "e" if t.segment != "none" else "0"
-    return f"m_{buf}[{', '.join([lead] + [str(i) for i in idx])}]"
+    return ref(prog, buf, idx)
 
 
 def _fn_expr(fn: str, order: int, arg: str, dt: str) -> str:
@@ -122,22 +122,17 @@ def _term_expr(term, dt: str) -> str:
     return f"{dt}({term.coeff!r}) * {factors}"
 
 
-#: Terms per emitted statement; see codegen/emit_tile.py. Chunking is left-to-right, so the
-#: summation order -- and therefore the ordering bound -- is unchanged.
-CHUNK = 48
-
-
 def _chunked_sum(target: str, parts: list[str], uid: int) -> list[str]:
-    if len(parts) <= CHUNK:
-        return [f"{target} = " + " + ".join(parts)]
-    lines, acc = [], None
-    for k in range(0, len(parts), CHUNK):
-        piece = parts[k:k + CHUNK]
-        name = f"_s{uid}_{k // CHUNK}"
-        lines.append(f"{name} = " + " + ".join(([acc] if acc else []) + piece))
-        acc = name
-    lines.append(f"{target} = {acc}")
-    return lines
+    return chunked_sum(target, parts, uid)
+
+
+#: The prose belongs to the template; the field set, order and formatting belong to the substrate.
+T1_NOTES = """#: Correctness contract for this kernel (DECISIONS.md D25). REDUCTION_DEPTH is the most terms
+#: any single output element sums; the harness turns it into a numeric bound against real
+#: inputs and asserts measured <= bound. EXACT additionally demands bit-equality.
+#: Which segment axis this kernel iterates. The caller must pass that segment's length as
+#: `n_seg`; passing another segment's length indexes past the end of every buffer. A node-rooted
+#: group launched with the edge count segfaults, which is how this came to be declared."""
 
 
 def emit_source(prog: Program, sched: Schedule, block: int = 128,
@@ -209,17 +204,7 @@ from cutlass.cute.runtime import from_dlpack
 BLOCK = {block}
 TENSOR_ORDER = {tensors!r}
 
-#: Correctness contract for this kernel (DECISIONS.md D25). REDUCTION_DEPTH is the most terms
-#: any single output element sums; the harness turns it into a numeric bound against real
-#: inputs and asserts measured <= bound. EXACT additionally demands bit-equality.
-#: Which segment axis this kernel iterates. The caller must pass that segment's length as
-#: `n_seg`; passing another segment's length indexes past the end of every buffer. A node-rooted
-#: group launched with the edge count segfaults, which is how this came to be declared.
-SEGMENT = "{spec.segment}"
-TEMPLATE = "T1"
-EMITTER_SHA = "{_esha}"
-REDUCTION_DEPTH = {depth}
-EXACT = True
+{metadata_block(spec.segment, "T1", _esha, depth, True, notes=T1_NOTES)}
 
 
 class Kernel:
