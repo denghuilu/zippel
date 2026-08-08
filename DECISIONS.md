@@ -1539,3 +1539,45 @@ requests per CTA, x 20.31 sectors x 32 B = **26.6 MB of L1->L2 traffic per CTA**
 6.27 TB/s x 0.7148 s = 4.48 TB, same order), of which the 57.4 % L2 hit rate leaves ~1.9 TB to
 DRAM against 2.24 measured. **[static, consistent with measurement — not an attribution.]**
 The source-attributed run exists to turn this into one.
+
+## 2026-08-08 — D61: post-adoption composition re-measure. Forward 1401.9 → 972.8 ms (1.441×). D47's clause does NOT trigger.
+
+**[measurement]** si_medium fp32, single node, GPU 0, nothing else on the board.
+
+| | pre-adoption (S1c) | post-adoption | change |
+|---|---|---|---|
+| fused forward | 1 401.9 ms | **972.782 ms** (IQR 1.475) | **−429.1 ms, 1.441×** |
+| eager forward | 49.99 ms | 49.828 ms (IQR 0.187) | unchanged, as it must be |
+| speedup | 0.036× | **0.051×** | |
+| peak memory ratio | 1.414× | 1.414× | unchanged |
+| launches | 55 / 248 | 55 / 248 | unchanged — layout changes no kernel count |
+
+**The rule generalised.** `conv1_90` alone accounts for 132.8 ms of the 429.1; the other **296 ms
+came from the nine further T2 groups** the default rule reached. That is the out-of-sample
+confirmation D55(b) asks for, delivered on wall-clock rather than on a model: ratified on one
+kernel, it paid three times over on nine others.
+
+### D47's expiry clause: evaluated, does not trigger
+
+The clause: *within 3× of any comparator and the single-node licence expires by its own
+condition, forcing N=5.*
+
+* vs **eager forward, 49.828 ms** — the comparator this bench actually defines: **19.52×**. Far
+  outside.
+* vs **eager's full training step, 311.63 ms** — the S3 target rather than a forward comparator:
+  **3.12×**. Outside, **but by 4 %.**
+
+**Licence holds; the re-measure stays single-node.** Recorded with the margin stated because it is
+thin: the next byte-cutting intervention of any size crosses it, and at that point the clause
+fires and N=5 becomes mandatory without further discussion. Flagging now rather than
+re-adjudicating later, when I will know which side I want to be on.
+
+### The hill
+
+`1 401.9 / 311.63 = 4.50×` before. **`972.782 / 311.63 = 3.12×` now — 31 % of the hill removed by
+one ratified layout rule**, at zero runtime cost and bit-exactly.
+
+**Peak memory: fused uses 20 728.8 MiB against eager's 29 318.4 — a 1.414× advantage to the fused
+side**, unchanged by the layout work (it moves bytes, not allocations). Not claimed as progress on
+the memory criterion: this is forward-only, and D23's store-elision lever lives in force and
+double-backward where the intermediates are 3× and 9× larger.
