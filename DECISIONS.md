@@ -2451,3 +2451,38 @@ it cannot bind a reading of an outcome it did not.
 **Next instrument is attribution of the 1.86 TB, not another lever aimed at it.** Running the
 direct check now — `ncu` with the window on versus off, reading `dram__bytes.sum` — because it
 closes a contradiction inside an existing attribution rather than opening a new line.
+
+## 2026-08-08 — D89: two laws enter the ledger, both with two signatures.
+
+**Pre-registration-limit doctrine.** A pre-registration binds the reading of the outcome it
+*anticipated*. When the world delivers an outcome outside its cells, the pre-registration is silent
+and saying so is **not** wriggling — provided the departure is named, its reason given, and the
+original branch quoted. Case: D88's "hypothesis false → lever (c) moves up" assumed a failure of
+*pinning*; what occurred was a failure of the *target*. Lever (c) moved **down**.
+
+**Units-law extension: attributions, not just predictions.** A demand-side truth may not stand in
+for a DRAM-side cost. D64's "the ideal traffic *is* the weights, 99.3 %" was correct **about
+demand** and was then carried, by me, into reasoning about DRAM traffic — where D88's intervention
+showed the weights contribute ~0.6 %. The original units law (D82) bound predictions; it now binds
+**attributions**, which is where the same error recurred in a different costume.
+
+## 2026-08-08 — D90: route C settled by probe. `findings/the-tracer-is-the-expander.md`.
+
+Directed twice as settled while unsupported; declining to file it unmeasured is what produced the
+measurement. The probe cost minutes and **confirms the reviewer's phrase**:
+
+    range_constexpr + named regs : COMPILED
+     range(dynamic) + scalar acc : COMPILED
+    range(dynamic) + indexed acc : FAILED -- ArithValue cannot be interpreted as an integer
+
+The dynamic loop variable is an MLIR SSA value, so it cannot index a Python container: **"accumulator
+number `e`" is unsayable when `e` is a run-time value.** Small IR *or* per-iteration registers,
+never both — and the expansion that creates the registers is the one that creates the IR.
+
+**Route C is dead; the `terms ∝ E_c` ceiling stands.** B is also not worth building: D81 measured
+its entire advantage at **0.05 s of a 286 s compile (0.02 %)**, confirming D80's collapse.
+
+## 2026-08-08 — D91: reporting discipline.
+
+Every status report is written to `reports/` with a dated filename and **committed before it is
+posted**; the reviewer pulls from git. Screenshot relay ends here.

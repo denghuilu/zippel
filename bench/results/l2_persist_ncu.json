@@ -1,0 +1,18 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "pool_bytes": 1310720,
+  "carveout_mib": 32,
+  "arms": {
+    "co0MiB_win0": {
+      "status": "profiled",
+      "err": 1.5573386418221702e-06,
+      "bitwise_equal": true
+    },
+    "co8MiB_win1": {
+      "status": "profiled",
+      "err": 1.5573386418221702e-06,
+      "bitwise_equal": true
+    }
+  }
+}
