@@ -1602,3 +1602,25 @@ fused side's *within-run* IQR is 0.138 ms (0.36 %), so the instability is betwee
 inside one. Normalising the fused figure by eager's drift gives ≈1.50× rather than 1.384×. **The
 honest statement is that si_small shows a gain of the same order as si_medium, not that it shows
 1.384×.** I am not taking the larger number just because it flatters the result.
+
+## 2026-08-08 — D63: the composition re-measure proved speed, not correctness. Closing that.
+
+`bench/s1c_bench.py` times `fused()` against `eager()` and **never compares their outputs** — it
+contains no `allclose`, no bound check, nothing. So D61 and D62 establish that the layout rule
+made the forward 1.441× faster and establish **nothing whatever** about whether it is still right.
+
+Per-group revalidation (D58, 47/47) does not close this. Each group there is launched with its own
+locally-permuted copy of `env`, so a group is checked against the reference *in isolation*. The
+composed program instead permutes buffers **once, globally**, in `compose.transpose_inputs` — a
+different code path, and precisely the one that could hand a permuted tensor to a kernel expecting
+the original layout. Per-group tests would pass while the composition was wrong. That is the exact
+failure mode `compose.py`'s header names and the reason its guard was added.
+
+`bench/s1c_forward.py` already does the right check — composed program vs FP64 interpreter, on the
+energy **and on every live-out**, so a wrong intermediate cannot hide behind a right total — and it
+had simply not been re-run since the rule landed. Running it now, before any of these numbers are
+carried forward.
+
+**The general point, for the record:** a performance harness that does not check correctness is
+not a weaker test, it is a *different* test, and citing its result as evidence the change is sound
+is a category error. Two entire measurements (D61, D62) were reported before I noticed.
