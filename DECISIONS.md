@@ -1624,3 +1624,68 @@ carried forward.
 **The general point, for the record:** a performance harness that does not check correctness is
 not a weaker test, it is a *different* test, and citing its result as evidence the change is sound
 is a category error. Two entire measurements (D61, D62) were reported before I noticed.
+
+## 2026-08-08 — D64: source-attributed ncu. The anomaly is named: the ideal traffic *is* the weights, re-read once per CTA.
+
+**[measurement]** baseline + A_transpose, si_medium fp32. Source correlation was available
+(45 236 rows); the pre-registered blocker did not fire.
+
+| | baseline | A_transpose |
+|---|---|---|
+| `memory_l2_theoretical_sectors_global` | 21 705 519 048 | **11 077 464 008** |
+| `memory_l2_theoretical_sectors_global_ideal` | 11 077 464 008 | 11 077 464 008 |
+| **actual / ideal** | **1.959×** | **1.000×** |
+| L1/TEX hit rate | 5.25 % | 5.16 % |
+| L2 hit rate | 57.37 % | 52.47 % |
+| DRAM read | 1.25 TB | 1.08 TB |
+| ncu duration | 715.60 ms | 582.88 ms |
+
+### A methodology worry of mine, checked and cleared
+
+I had been computing DRAM bytes as *(profiled rate) × (unprofiled wall-clock)*, which mixes a
+clock-locked measurement with a free-running one. ncu's own durations are **715.60 / 582.88 ms**
+against the factorial's **714.819 / 582.023** — **0.11 % and 0.15 % apart**. Clock locking did not
+distort these kernels. The bytes law now restates entirely within one run: bytes ratio **1.205**
+against duration ratio **1.2277**, **1.9 %** apart. Unaffected, and now free of the mixed-source
+defect.
+
+### The attribution, which is what the run was for
+
+**`A_transpose` achieves the ideal exactly** — 11 077 464 008 against an ideal of
+11 077 464 008. Coalescing is at its theoretical minimum; **there is nothing left on that axis.**
+
+And the ideal is itself the finding:
+
+    11 077 464 008 sectors x 32 B          =  354.5 GB
+    / 259 474 CTAs                         =  1.366 MB per CTA
+
+    four weights   c1_w1a/b 512 KiB each, c1_w2a/b 128 KiB each  =  1.3107 MB
+    per-edge row   2 154 MiB / 259 474                           =  0.0087 MB
+    predicted per CTA                                            =  1.3194 MB
+
+**1.366 measured against 1.319 predicted — 3.6 % apart.** So the ideal traffic is, to within
+3.6 %, *every weight, once per CTA, plus that edge's own row*, and **the weights are 99.3 % of
+it**. 1.31 MB re-read 259 474 times is **340 GB**. That is the "1.25 MB leaks terabytes" anomaly,
+named. The answer to the fork D60 left open is **the weight loads**, not the per-edge loads.
+
+### What this does to the new arm, before it fires
+
+**The re-read is cross-CTA** — which is exactly what D46 established shared memory cannot capture.
+A k-tiled ≤ 48 KiB weight stage preserves occupancy but still stages *per CTA*, so it cannot touch
+the 340 GB; it would only re-coalesce traffic `A_transpose` has already driven to optimal. **The
+capacity-safe staging arm, as specified, cannot win.** Recorded before firing it rather than after
+measuring another 0.99×.
+
+Levers that *do* cut the 340 GB, in structural order:
+1. **More edges per CTA** — divides weight re-reads by edges-per-CTA. Structural, and the largest.
+2. **L2 persistence window** for the weight footprint.
+3. **CTA scheduling** for temporal locality.
+
+### One quantity I cannot reconcile, flagged rather than papered over
+
+`lts__t_sectors_op_read.sum` is **93.37e9 sectors (2.99 TB)** while global-load L1 misses are
+**17.36e9 (555 GB)** — L2 sees **5.4×** the read traffic L1 misses account for. Candidates:
+write-allocate on the output, per-slice accounting granularity, or another client. **I do not know
+which, and I am not asserting one.** It does not affect the attribution above, which rests on the
+theoretical-sector metrics and simple arithmetic, but it means any *total-traffic* budget built on
+these counters is not yet trustworthy. D55 applies to me here as much as to anything else.
