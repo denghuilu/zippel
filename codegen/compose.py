@@ -54,6 +54,10 @@ class CompiledGroup:
     scatters: bool
     launch: object = None
     terms: int = 0
+    #: {buffer: permutation of its trailing axes} the kernel was emitted against. The tensor
+    #: handed in at launch MUST be in this layout. Read back from the generated module, never
+    #: recomputed by the caller (D52).
+    transpose: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -134,7 +138,8 @@ def compile_program(prog: Program, sizes: dict[str, int], label: str,
             order=tuple(tensor_order), live_out=tuple(spec.live_out),
             driving_segment=getattr(module, "DRIVING_SEGMENT", module.SEGMENT),
             scatters=getattr(module, "SCATTERS", False),
-            launch=Kernel(), terms=sched.n_terms))
+            launch=Kernel(), terms=sched.n_terms,
+            transpose=dict(getattr(module, "TRANSPOSE", {}))))
     return out
 
 
@@ -157,6 +162,40 @@ def allocate(cp: CompiledProgram, inputs: dict[str, torch.Tensor],
         t = op.out_type
         n = 1 if t.segment == "none" else cp.sizes[t.segment]
         env[name] = torch.zeros(n, *t.sizes, device="cuda", dtype=dtype)
+    return transpose_inputs(cp, env)
+
+
+def transpose_inputs(cp: CompiledProgram, env: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
+    """Put every program input into the layout its kernel was emitted against (D54).
+
+    T2's layout requirement -- thread-mapped axis innermost -- is worth a measured **1.228x** on
+    `conv1_90` and applies to 10 of the 24 T2 groups. The emitter publishes the permutation it
+    used as the generated module's `TRANSPOSE`; this reads it back. Computing it a second time
+    here instead is the D52 bug, which presented as an illegal memory access.
+
+    Done once, here, rather than per launch: every buffer the rule names is a program input, so
+    its layout is fixed for the life of the environment and the rewrite costs nothing at run time.
+    `.contiguous()` is the whole point -- a bare `permute` only relabels axes and would leave the
+    physical strides, and therefore the coalescing, exactly as they were.
+    """
+    want: dict[str, tuple[tuple, str]] = {}
+    for g in cp.groups:
+        for b, perm in (g.transpose or {}).items():
+            perm = tuple(perm)
+            if b in want and want[b][0] != perm:
+                raise ValueError(
+                    f"buffer {b!r} is required in layout {want[b][0]} by {want[b][1]} and "
+                    f"{perm} by {g.name}. One tensor cannot satisfy both; the operand would need "
+                    f"a per-kernel copy, which is a real cost and a decision, not a default.")
+            want[b] = (perm, g.name)
+    for b, (perm, gname) in want.items():
+        if b not in cp.prog.inputs:
+            raise ValueError(
+                f"{gname} wants buffer {b!r} in layout {perm}, but {b!r} is produced by another "
+                f"kernel rather than being a program input. Permuting it here would silently "
+                f"disagree with whatever wrote it; the producing kernel would have to emit the "
+                f"permuted layout instead. Out of scope for the layout requirement as ratified.")
+        env[b] = env[b].permute((0,) + tuple(k + 1 for k in perm)).contiguous()
     return env
 
 

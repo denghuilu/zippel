@@ -128,7 +128,19 @@ def _run_tile(simp, env, sizes, group, name):
             "EXACT": mod.EXACT}
 
     outs = {b: torch.zeros_like(env[b]) for b in spec.live_out}
-    tensors = {b: env[b].contiguous() for b in order if b not in outs} | outs
+    # T2's layout requirement (D54) is a default now, so an operand may need permuting before
+    # launch. The permutation comes from the module the kernel was built from -- recomputing it
+    # here is the D52 bug. `env` is not mutated: it is the reference the result is checked
+    # against, and the fixture is shared across tests.
+    _tr = getattr(mod, "TRANSPOSE", {})
+
+    def _prep(b):
+        v = env[b]
+        if b in _tr:
+            v = v.permute((0,) + tuple(k + 1 for k in _tr[b]))
+        return v.contiguous()
+
+    tensors = {b: _prep(b) for b in order if b not in outs} | outs
     stream = cutlass.cuda.default_stream()
     args = tuple(from_dlpack(tensors[b], assumed_align=16) for b in order) + (
         Int32(sizes["edge"]), stream)

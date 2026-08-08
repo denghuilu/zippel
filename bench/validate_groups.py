@@ -128,7 +128,19 @@ def main():
             n_seg = sizes[getattr(module, "DRIVING_SEGMENT", module.SEGMENT)]
 
             outs = {b: torch.zeros_like(env[b]) for b in spec.live_out}
-            tensors = {b: (outs[b] if b in outs else env[b].contiguous()) for b in order}
+            # The layout requirement (D54) is now T2's default, so an operand may need permuting
+            # before launch. Read the permutation back from the module the kernel was built from,
+            # never recompute it (D52). `env` itself is left alone: it is the reference the result
+            # is checked against, and several groups share it.
+            _tr = getattr(module, "TRANSPOSE", {})
+
+            def _prep(b, _tr=_tr):
+                v = env[b]
+                if b in _tr:
+                    v = v.permute((0,) + tuple(k + 1 for k in _tr[b]))
+                return v.contiguous()
+
+            tensors = {b: (outs[b] if b in outs else _prep(b)) for b in order}
             call = tuple(from_dlpack(tensors[b], assumed_align=16) for b in order) + (
                 Int32(n_seg), stream)
             t0 = time.perf_counter()

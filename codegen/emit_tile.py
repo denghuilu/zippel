@@ -101,6 +101,55 @@ def staged_layout(prog: Program, sched: TileSchedule, buf: str) -> dict:
             "slab_stride": slab_stride, "extent": sizes[p]}
 
 
+def required_transpose(prog: Program, sched: TileSchedule) -> dict[str, tuple]:
+    """T2's layout requirement: the thread-mapped axis must be innermost in every operand (D54).
+
+    T2 puts one channel on each thread. An operand whose thread-mapped axis is *not* its innermost
+    is read by consecutive threads at a stride of its trailing extents -- 2 048 B for `c1_w1a` --
+    so a warp load touches 32 distinct cache lines where a coalesced one touches 4 sectors.
+    Permuting that axis last makes the same reads contiguous. **Measured 1.228x on `conv1_90`**
+    (D53), bit-exact: a permutation changes neither the values nor the order they are summed in.
+
+    Applies to **10 of the 24 T2 groups** in the forward program. Every operand it names is a
+    *program input* -- a weight -- so the permutation is applied once when the environment is
+    allocated and costs nothing per launch.
+
+    **Scoped to program inputs on purpose.** A *produced* buffer with the same defect would need
+    its producing kernel to write the permuted layout, which is a different and larger change; it
+    is left alone rather than silently mishandled. No such buffer exists in the forward program
+    today, so the restriction costs nothing measurable -- but it will not fail quietly if one
+    appears, because `compose.transpose_inputs` raises on anything it is asked to permute that it
+    did not allocate.
+
+    Published by the generated module as `TRANSPOSE` so the launch side reads it back rather than
+    recomputing it -- the D52 bug, which cost an illegal memory access.
+    """
+    out: dict[str, tuple] = {}
+    for b in sched.spec.live_in:
+        if b not in prog.inputs:
+            continue
+        t = prog.type_of(b)
+        sizes = getattr(t, "sizes", ())
+        if len(sizes) < 2:
+            continue
+        p = _thread_axis_or_none(sched, b)
+        if p is None or p == len(sizes) - 1:
+            continue
+        out[b] = tuple([k for k in range(len(sizes)) if k != p] + [p])
+    return out
+
+
+def _thread_axis_or_none(sched: TileSchedule, buf: str) -> int | None:
+    for a in sched.assigns:
+        for t in a.terms:
+            for f in t.factors:
+                if f[0] == buf:
+                    for k, i in enumerate(f[1]):
+                        if isinstance(i, Ch):
+                            return k
+    return None
+
+
 def _thread_axis(sched: TileSchedule, buf: str) -> int:
     for a in sched.assigns:
         for t in a.terms:
@@ -161,11 +210,17 @@ def emit_tile_source(prog: Program, sched: TileSchedule, dtype: str = "f32",
     tensors += list(spec.live_out)
     params = ", ".join(f"m_{b}: cute.Tensor" for b in tensors)
 
+    # `transpose=None` means "apply T2's layout requirement", which is the default and the
+    # ratified rule. An explicit dict overrides it -- including `{}` for a deliberately unfixed
+    # kernel, which is how the factorial's baseline arm is built. `or {}` would have conflated
+    # those two, so the sentinel is `is None` and not falsiness.
+    if transpose is None:
+        transpose = required_transpose(prog, sched)
     # Staging subsumes transposition: every read of a staged operand goes through smem, and the
     # cooperative load reads the tensor in its original layout. Permuting it as well would be a
     # no-op on the arithmetic and a second, invisible difference between arms.
     staged = {b: staged_layout(prog, sched, b) for b in stage_shared}
-    transpose = {b: p for b, p in (transpose or {}).items() if b not in staged}
+    transpose = {b: p for b, p in transpose.items() if b not in staged}
     itemsize = 8 if dtype == "f64" else 4
     smem_bytes = sum(lay["extent"] * lay["T"] * itemsize for lay in staged.values())
     if smem_bytes > SMEM_CAP_BYTES:
