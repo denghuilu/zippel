@@ -1,0 +1,56 @@
+{
+  "fixture": "si_medium",
+  "dtype": "f32",
+  "pool_bytes": 1310720,
+  "carveout_mib": 32,
+  "arms": {
+    "co0MiB_win0": {
+      "status": "ok",
+      "ms": 582.4493408203125,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.036163200720958626
+    },
+    "co32MiB_win0": {
+      "status": "ok",
+      "ms": 1240.141357421875,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.030907829898265994
+    },
+    "co2MiB_win1": {
+      "status": "ok",
+      "ms": 579.1756591796875,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.030402939590149402
+    },
+    "co4MiB_win1": {
+      "status": "ok",
+      "ms": 579.1640625,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.021350984042194435
+    },
+    "co8MiB_win1": {
+      "status": "ok",
+      "ms": 579.1607666015625,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.029866255241612103
+    },
+    "co32MiB_win1": {
+      "status": "ok",
+      "ms": 1236.4754638671875,
+      "err": 1.5573386418221702e-06,
+      "bound": 0.001023879332292407,
+      "bitwise_equal": true,
+      "spread_pct": 0.03177938806068432
+    }
+  }
+}

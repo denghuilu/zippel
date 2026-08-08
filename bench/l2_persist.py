@@ -100,6 +100,10 @@ def main():
                          "default. The control that matters is carve-out WITHOUT a window: it "
                          "separates 'persistence did not help' from 'my carve-out starved the "
                          "streaming data', which a single oversized arm cannot.")
+    ap.add_argument("--ncu", action="store_true",
+                    help="profiled mode: one launch per config inside profiler start/stop, no "
+                         "timing. Settles whether pinning changes DRAM BYTES, which the wall-clock "
+                         "ladder can only infer.")
     ap.add_argument("--warmup", type=int, default=5)
     ap.add_argument("--iters", type=int, default=30)
     ap.add_argument("--out", default="bench/results/l2_persist.json")
@@ -244,6 +248,14 @@ def main():
         else:
             bitwise = all(torch.equal(out[b], base_out[b]) for b in spec.live_out)
 
+        if args.ncu:
+            torch.cuda.profiler.start()
+            fn(*call)
+            torch.cuda.synchronize()
+            torch.cuda.profiler.stop()
+            results[name] = {"status": "profiled", "err": err, "bitwise_equal": bitwise}
+            print(f"{name}: profiled one launch (no timing taken)", flush=True)
+            continue
         for _ in range(args.warmup):
             fn(*call)
         torch.cuda.synchronize()

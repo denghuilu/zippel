@@ -2407,3 +2407,47 @@ intervention's *overhead* from its *effect* is not optional when the interventio
 resource.** Reserving capacity is never free, so any measurement of "did pinning help?" must be
 paired with "what did reserving cost?" — and I should have built that pair from the start rather
 than after a surprising number.
+
+## 2026-08-08 — D88: L2 persistence adjudicated on a clean experiment. Eviction hypothesis REFUTED — and the weights are not the DRAM traffic.
+
+**[intervention]** `conv1_90`, si_medium fp32, `E_c`=1, NUMA-pinned, GPU 0. All arms bit-equal.
+
+| arm | reserved | window | ms | vs baseline |
+|---|---|---|---|---|
+| `co0MiB_win0` | 0 | off | 582.449 | 1.000× |
+| `co2MiB_win1` | 3.75 MiB | on | 579.176 | **1.0057×** |
+| `co4MiB_win1` | 7.50 MiB | on | 579.164 | **1.0057×** |
+| `co8MiB_win1` | 11.25 MiB | on | 579.161 | **1.0057×** |
+| **`co32MiB_win0`** | 33.75 MiB | **off** | **1240.141** | **0.470×** |
+| `co32MiB_win1` | 33.75 MiB | on | 1236.475 | 0.471× |
+
+**D87's confound was the entire effect.** The carve-out *alone* reproduces the slowdown to 0.24 %;
+the window contributes nothing to it. **Reserving 33.75 MiB of a 60 MiB L2 (56 %) costs 2.13×,
+while 11.25 MiB (19 %) is free.** That cliff is a reusable fact and it is the only thing the
+original single-arm experiment measured.
+
+**Verdict: eviction hypothesis REFUTED.** Persistence *applies* — the 0.56 % gain is flat across
+2/4/8 MiB carve-outs to within 0.003 %, so the 1.25 MiB region is fully pinned at the smallest and
+extra capacity has nothing left to pin. It works, and it buys **0.56 %**.
+
+### The inference that matters, and it contradicts D64
+
+**Pinning the weights should have been worth ~18 %.** D64 attributed 99.3 % of *demand* to the
+weights: 340 GB against 1 860 GB of measured DRAM traffic. If that 340 GB came from DRAM, pinning
+removes 18 % of the traffic — and since time tracks DRAM bytes to 0.5 % (D85), ~18 % of the time.
+**Measured: 0.56 %.**
+
+So **the weights were already being served by L2 without pinning**, and the 1.86 TB — **539× this
+kernel's 3.45 GB of compulsory traffic** — is *not* weight re-fetch. D64's demand attribution was
+correct about demand and says nothing about DRAM, which is the D82 units fault appearing a second
+time in a different costume: I let a demand-side attribution stand in for a DRAM-side one.
+
+**Consequence for lever (c):** CTA-scheduling targets *weight reuse across CTAs*. Weight reuse has
+now been shown not to be the cost. **Lever (c) moves DOWN, not up** — the opposite of what the
+"hypothesis false" branch pre-registered, because that branch assumed a failure of *pinning* rather
+than a failure of the *target*. Pre-registration binds the reading of the outcome it anticipated;
+it cannot bind a reading of an outcome it did not.
+
+**Next instrument is attribution of the 1.86 TB, not another lever aimed at it.** Running the
+direct check now — `ncu` with the window on versus off, reading `dram__bytes.sum` — because it
+closes a contradiction inside an existing attribution rather than opening a new line.
