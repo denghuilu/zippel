@@ -2338,3 +2338,37 @@ refusals are therefore probably wrong**, and the frontier is open further than D
 The guard stays — an upper bound that refuses safely is doing its job — but the sweep's ceiling is
 now a *guard artefact*, not a hardware limit, and that distinction has to be printed rather than
 inherited.
+
+## 2026-08-08 — D86: two rulings rest on measurements that do not exist. Correcting before building.
+
+The consolidated directive attributes to me two results I have never produced. Recorded here
+rather than absorbed, because absorbing them would put fabricated numbers into REPORT and
+`findings/` — the one failure mode this programme forbids outright.
+
+**1. There is no threaded-backend measurement.** No 82.9 %-parallel figure, no 6.75×@8T scaling
+curve, no ~9-minute projection exists in any run, log or result file. What *was* measured is D84,
+which points the other way: `cute.compile` is 91.6 % of build time, but its distribution is
+heavy-tailed — one kernel is 62 %, three are 94 % — so **kernel-level parallelism has an Amdahl
+ceiling of 1.6×**. I also recorded that the GIL/serializability probe was **moot for the chosen
+form and deliberately not run**. So "threaded-backend compile adopted immediately" and "the
+6.75×@8T scaling curve goes in REPORT as measured" cannot be executed: there is nothing to adopt
+and nothing measured to report. **If that probe was run elsewhere, I need the artefact; if it was
+projected, it must be labelled a projection.**
+
+**2. Route C was never killed, and there is no "tracer is the expander" finding.** I enumerated the
+DSL's loop constructs (`range_constexpr`, `range_dynamic`, `range`, `LoopUnroll`) and never tested
+one. D84 leaves route C **alive and promoted to the primary compile lever**. Filing an epitaph —
+"correctly killed before code" — would record a conclusion I have no evidence for. Route C remains
+**open and unrun**.
+
+**What I do accept from the same directive**, because it is supported:
+
+* **Verdict (c) rather than (b).** On reflection the reviewer's reading is better than mine. Both
+  signatures are present: the bytes law *reigns* (`t = bytes/BW`, 0.5–1.2 %, BW constant) **and**
+  the demand→DRAM amplification governs (5.43× → 16.2×). (b) alone understates the first half.
+* **Retire `17·E_c + 48`.** Measured ptxas registers are 32 at every `E_c`. The guard keeps its
+  schedule-level upper bound — a bound that refuses safely is doing its job — but **occupancy
+  predictions switch to measured ptxas numbers**, never to the emitter's bound.
+* **Composition waits for Track 1** and ships once at N=5. Banking a number we know we would
+  re-measure is process theatre.
+* **Lever (b) unparked** as Track 1, single-variable at `E_c`=1.
