@@ -2185,3 +2185,42 @@ If `conv2_95` and `conv1_m0_86` respond like `conv1_90` (~1.33×), the forward w
 margin**. D47 would then fire by its own text and the composition re-measure becomes **N=5**.
 Recorded now, before the composition runs, so the trigger is not evaluated by someone who already
 knows the number.
+
+## 2026-08-08 — D82: the units law, and why the achieved-BW column was missing.
+
+**Units law, adopted.** *Every byte prediction names its bytes — **demand** or **DRAM** — and may
+only be divided into a law validated on the same kind.*
+
+**The shared fault, stated plainly.** D59's bytes law was validated on **DRAM** bytes
+(`dram__bytes.sum.per_second` × duration). D69's edge-batch predictions were **demand** bytes —
+what the kernel requests, `1.3107/E_c + 0.0087` MB/edge. **I divided a demand-byte prediction into
+a DRAM-validated law.** Those quantities are separated by the entire cache hierarchy, and closing
+that gap is precisely what an L2 at a 57 % hit rate does. **The plateau may be nothing more than
+this error**, which is why the adjudication measures both kinds on one kernel rather than arguing
+about which should have been used.
+
+**Why the pre-registered achieved-BW column was absent from the sweep table.** D71 filed it as a
+guard on *the sweep*. The sweep harness (`bench/s1c_edge_batch.py`) times with CUDA events and
+**cannot measure DRAM bandwidth at all** — that needs `ncu`. So the requirement was **filed
+against an instrument incapable of satisfying it**, and I did not notice when writing the bench.
+It is not that the column was dropped; it was never obtainable there. It now lives in the ncu pass,
+which is where it should have been filed. **The generalisable form: a pre-registered metric must
+name the instrument that will produce it, or it is a wish.**
+
+## 2026-08-08 — D83: sequencing and the concurrency ruling.
+
+Serial compile of the three arms is **78 minutes** (286 + 1 047 + 3 355 s). Three processes on
+three GPUs cost the longest arm alone — **56 minutes, a 22-minute saving** — so the adjudication is
+launched as three plain processes, one arm per GPU, rather than one serial driver.
+
+**The pinning law is honoured by scope, not by luck.** Arm 1 profiles while arms 2 and 3 still
+compile, so cores are shared during measurement — which would violate the law if a *timing* were
+being taken. **Counters are unaffected by CPU contention; wall-clock is.** So durations from this
+run are explicitly **not** used as timings: D81's separately-measured wall-clock stands, and this
+pass contributes only occupancy, registers, bandwidth, byte counts and the SASS hoist. Recorded
+before the numbers arrive so the exclusion cannot be applied selectively afterwards.
+
+**Order:** (1) three concurrent recompiles **[running]** → (2) parallel-compile harness, built
+while they run → (3) ncu adjudication → (4) route-C probe under the new harness → (5) reopened
+sweep cells or the two-conv generalisation → composition at N=5. **MMA pre-registration drafts
+only after (3).**
