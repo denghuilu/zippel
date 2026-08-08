@@ -1581,3 +1581,24 @@ one ratified layout rule**, at zero runtime cost and bit-exactly.
 side**, unchanged by the layout work (it moves bytes, not allocations). Not claimed as progress on
 the memory criterion: this is forward-only, and D23's store-elision lever lives in force and
 double-backward where the intermediates are 3× and 9× larger.
+
+## 2026-08-08 — D62: the si_small regime check. The layout rule is not a large-fixture artefact.
+
+**[measurement]** fp32, single node, same board, sequential with the si_medium run.
+
+| fixture | fused pre | fused post | fused gain | speedup pre → post | peak ratio |
+|---|---|---|---|---|---|
+| si_medium | 1 401.9 ms | **972.782 ms** | **1.441×** | 0.036× → **0.051×** | 1.414× (unchanged) |
+| si_small | 52.8 ms | **38.152 ms** | **1.384×** | 0.104× → **0.156×** | 1.393× (unchanged) |
+
+The gain holds across a 27× change in problem size — **1.384× vs 1.441×** — so the layout
+requirement is a property of the access pattern and not of the large fixture it was found on.
+This is the regime check deferred out of the factorial precisely so it would land here.
+
+**One caveat, and it belongs to si_small rather than to the result.** Eager at si_small moved
+5.50 → 5.965 ms between the two runs (+8.5 %) while doing identical work; REPORT §5 already
+records si_small as **between-run unstable and reported as such rather than as a number**. The
+fused side's *within-run* IQR is 0.138 ms (0.36 %), so the instability is between allocations, not
+inside one. Normalising the fused figure by eager's drift gives ≈1.50× rather than 1.384×. **The
+honest statement is that si_small shows a gain of the same order as si_medium, not that it shows
+1.384×.** I am not taking the larger number just because it flatters the result.
